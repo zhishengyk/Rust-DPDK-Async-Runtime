@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 out=${1:-results/local}
 mkdir -p "$out"
 scripts/run-a.sh --delay-us 500 --duration-sec 60 --output "$out/a-60.json" > "$out/a-60.log" 2>&1
+scripts/run-b.sh --delay-us 500 --duration-sec 60 --output "$out/b-60.json" > "$out/b-60.log" 2>&1
 scripts/run-a.sh --delay-us 500 --duration-sec 600 --output "$out/a-600.json" > "$out/a-600.log" 2>&1
 scripts/run-b.sh --delay-us 500 --duration-sec 600 --output "$out/b-600.json" > "$out/b-600.log" 2>&1
 python3 scripts/compare.py "$out/a-600.json" "$out/b-600.json" | tee "$out/ab.txt"

@@ -150,7 +150,8 @@ python3 scripts/compare.py results/a-600.json results/b-600.json
 ## C 的可比性
 
 本机 iputils 20210202 的 `-i` 以整数毫秒存储，设计稿的 `-i 0.0005` 实际会变成 0。
-因此 C 使用 `ping -n -I enp39s0 -i 0.001 -s 64 -w 60 -W 1 10.202.8.15`，固定到核 0–1。
+因此 C 使用 `ping -n -U -I enp39s0 -i 0.001 -s 64 -w 60 -W 1 10.202.8.15`，固定到核 0–1。
+`-U` 使用用户态收包后的时间；默认 SO_TIMESTAMP 是内核收包时间，少算了用户态接收部分。
 脚本仅解析系统 ping 输出，没有自行实现第三个 ICMP 客户端。
 
 对 C 另外测一组 A：64 session、`--delay-us 64000 --duration-sec 60`，总速率约
@@ -197,4 +198,5 @@ reply/timeout、重复唤醒、跨线程唤醒、runtime 销毁后的 Waker。
 大于 MTU 的 payload、不可信网络中的完整协议校验、多核、热插拔、故障重连均不在本项目范围。
 
 参考：[DPDK ENA 文档](https://doc.dpdk.org/guides-23.11/nics/ena.html)、
-[iputils interval 解析](https://github.com/iputils/iputils/blob/20210202/ping/ping.c)。
+[iputils interval 解析](https://github.com/iputils/iputils/blob/20210202/ping/ping.c)、
+[iputils 收包计时](https://github.com/iputils/iputils/blob/20210202/ping/ping_common.c)。

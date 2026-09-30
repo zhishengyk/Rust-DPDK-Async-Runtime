@@ -1,0 +1,111 @@
+{
+  "accounted": true,
+  "client": "B",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_replied": 0,
+    "arp_tx_failed": 0,
+    "duplicate": 0,
+    "foreign": 0,
+    "late_reply": 0,
+    "rx": 25092,
+    "timeout": 0,
+    "tx": 25092,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 1.0049691068540878,
+  "histogram_relative_error_max": 0.015625,
+  "latency": {
+    "end_to_end": {
+      "count": 25092,
+      "max": 317412,
+      "p50": 107126,
+      "p90": 122880,
+      "p99": 184321,
+      "p999": 308777,
+      "p9999": 317412
+    },
+    "process": {
+      "count": 25092,
+      "max": 10610,
+      "p50": 371,
+      "p90": 485,
+      "p99": 1673,
+      "p999": 1993,
+      "p9999": 3987
+    },
+    "receive": {
+      "count": 25092,
+      "max": 1820,
+      "p50": 121,
+      "p90": 181,
+      "p99": 341,
+      "p999": 522,
+      "p9999": 1771
+    },
+    "send": {
+      "count": 25092,
+      "max": 10480,
+      "p50": 242,
+      "p90": 331,
+      "p99": 1562,
+      "p999": 1870,
+      "p9999": 3839
+    },
+    "sleep_error": {
+      "count": 25092,
+      "max": 10458,
+      "p50": 99,
+      "p90": 688,
+      "p99": 1415,
+      "p999": 2411,
+      "p9999": 9058
+    },
+    "timer": {
+      "count": 24964,
+      "max": 10638,
+      "p50": 159,
+      "p90": 750,
+      "p99": 1464,
+      "p999": 2485,
+      "p9999": 9058
+    }
+  },
+  "losses": [],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "nic": {
+    "missed": 0,
+    "rx": 25092,
+    "rx_errors": 0,
+    "rx_nombuf": 0,
+    "tx": 25459,
+    "tx_errors": 0
+  },
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 5000,
+    "duration_sec": 1,
+    "output": "results/b-maximum.json",
+    "payload": 1472,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 128,
+    "src_ip": "10.202.15.210",
+    "timeout_us": 10000
+  },
+  "tsc_hz": 2599980113,
+  "units": "ns"
+}

@@ -31,7 +31,8 @@ latency = dict(count=count, p50=percentile(.5), p90=percentile(.9), p99=percenti
                p999=percentile(.999), p9999=percentile(.9999), max=max(hist))
 report = dict(client='C', units='ns', elapsed_sec=int(duration), tx=transmitted, rx=received,
               loss=transmitted-received, packets_per_sec=count/int(duration),
-              latency=dict(end_to_end=latency), interval_ms=1, payload=64, sessions=1)
+              latency=dict(end_to_end=latency), interval_ms=1, payload=64, sessions=1,
+              receive_timestamp='userspace (-U)')
 with open(destination, 'w') as out:
     json.dump(report, out, indent=2)
 print(json.dumps(report, indent=2))

@@ -1,0 +1,7 @@
+A - B process latency (ns; difference of quantiles):
+  p50: 59
+  p90: 68
+  p99: 74
+  p999: 74
+  p9999: 74
+  max: 567354
