@@ -99,6 +99,8 @@ ARP 请求原地改为应答；不实现 ARP 缓存、路由、分片或 IPv4 op
 发送模板是普通字节数组，每次从 DPDK mempool 分配 mbuf、复制帧并交给 PMD，
 不永久提高模板 mbuf 的引用计数。这样超时重发也不用证明上一包 DMA 已完成。
 这是 mempool 操作，不是每包系统堆分配；A/B 使用完全相同的发送函数。
+内存池启用 128 个 mbuf 的本核缓存；ENA 的 TX 回收阈值设为描述符数减 16，
+让发送完成回收分成较小批次，降低单次发送的尾延迟。
 `Mbuf::Drop` 归还包，`Rc<Pool>` 保证 pool/EAL 比所有包活得更久。
 TX 失败立即释放，计入 `tx_failed`，下一次仍遵守 delay；不加无限重试或恢复框架。
 
@@ -145,7 +147,8 @@ python3 scripts/compare.py results/a-600.json results/b-600.json
 ```
 
 这里只计算 **A 分位数减 B 分位数**，不是逐样本配对差分。
-结果见 [实测报告](results/REPORT.md)；原始终端日志及完整 JSON 一并保留。
+优化前的结果见 [原始实测报告](results/REPORT.md)，本次配置调整及对照结果见
+[延迟优化报告](results/optimization/REPORT.md)；原始终端日志及完整 JSON 一并保留。
 
 ## C 的可比性
 

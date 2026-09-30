@@ -13,7 +13,8 @@ static inline uint64_t cycles(void) {
 int w_eal_init(int argc, char **argv) { return rte_eal_init(argc, argv); }
 void w_eal_cleanup(void) { rte_eal_cleanup(); }
 w_pool *w_pool_create(void) {
-    return (w_pool *)rte_pktmbuf_pool_create("ping_pool", 4095, 0, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+    // Keep single-lcore alloc/free off the shared mempool ring in the common case.
+    return (w_pool *)rte_pktmbuf_pool_create("ping_pool", 4095, 128, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
 }
 void w_pool_free(w_pool *p) { rte_mempool_free((struct rte_mempool *)p); }
 unsigned w_pool_avail(w_pool *p) { return rte_mempool_avail_count((struct rte_mempool *)p); }
@@ -29,6 +30,8 @@ int w_port_start(w_pool *pool, uint8_t *mac) {
     if (rc < 0) return rc;
     rc = rte_eth_rx_queue_setup(0, 0, rx, rte_socket_id(), &info.default_rxconf, (struct rte_mempool *)pool);
     if (rc < 0) return rc;
+    // ENA cleans when free descriptors fall below this: ~16 instead of ~64 outstanding.
+    info.default_txconf.tx_free_thresh = tx - 16;
     rc = rte_eth_tx_queue_setup(0, 0, tx, rte_socket_id(), &info.default_txconf);
     if (rc < 0) return rc;
     rc = rte_eth_macaddr_get(0, (struct rte_ether_addr *)mac);
