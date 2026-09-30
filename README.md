@@ -65,6 +65,8 @@ raw-ping (手写状态表，不依赖 rt)
 移进该 session 的 `Slot`。Waker 去重后把 task id 放入定长就绪 ring；
 executor 在这一轮调用 future 的 `poll`，`recv().await` 返回，task 第一行记录 T3。
 runtime 提供的就是 **所有权交接、唤醒、调度、超时和持有 mbuf 期间的异步 sleep**。
+当前循环先 poll 收包唤醒的任务，再检查 timer/跨线程唤醒并再次 poll，最后执行驱动维护。
+这调整了设计稿 §4.2 的顺序，让已经到达的 reply 优先交给 session；T0–T3 的位置不变。
 
 A 的每个 session 是独立 async task：
 
@@ -90,7 +92,9 @@ ARP 请求原地改为应答；不实现 ARP 缓存、路由、分片或 IPv4 op
   本线程走 TLS + ready ring；跨线程走全局注册表 + 原子位图。
   runtime 销毁会注销标识，旧 Waker 失效，不会访问已释放内存或唤醒新 runtime。
 - 正常线程内唤醒无分配、无锁、无原子 RMW。每圈仍有两次 relaxed load 检查外部唤醒。
-  poll 每轮有上限，持续 self-wake 的 future 也不会饿死 reactor。
+  两个 poll 阶段各最多 128 次，持续 self-wake 的 future 也不会饿死 reactor、timer 或维护。
+- reply 槽用 `Cell<Option<T>>` 直接转移所有权；交付时取出并消费 Waker，
+  不保留内部借用，也不让接收 future 在恢复时再次销毁同一个 Waker。
 - runtime/DPDK/mbuf 都不能 Send/Sync；Waker 遵守标准库 Send/Sync 契约。
   `RefCell` 只做局部借用，绝不持有 guard 跨 await。
 
@@ -111,6 +115,7 @@ timer/task 槽不在一次运行内回收复用；固定启动任务已满足 de
 TSC 使用 `LFENCE; RDTSC; LFENCE` 和编译器内存屏障，避免把几十纳秒的指标建立在
 未排序的指令上。C shim 与 Rust 使用同一序列；A/B 同样承担打点开销。
 ENA watchdog 的 `rte_timer_manage` 每毫秒调用一次；不另建后台上报线程。
+`Runtime::run_with_maintenance` 在两轮任务 poll 后执行维护闭包；普通 `run` 不需要此闭包。
 
 ## 测量口径与报表
 
@@ -149,6 +154,7 @@ python3 scripts/compare.py results/a-600.json results/b-600.json
 这里只计算 **A 分位数减 B 分位数**，不是逐样本配对差分。
 优化前的结果见 [原始实测报告](results/REPORT.md)，本次配置调整及对照结果见
 [延迟优化报告](results/optimization/REPORT.md)；原始终端日志及完整 JSON 一并保留。
+后续 runtime 调度与 reply 槽优化见 [runtime 优化报告](results/runtime-optimization/REPORT.md)。
 
 ## C 的可比性
 

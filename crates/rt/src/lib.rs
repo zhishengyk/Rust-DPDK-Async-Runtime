@@ -196,7 +196,34 @@ impl Runtime {
         self.tasks.push(Some(Box::pin(make(handle))));
         self.ready.borrow_mut().push(id);
     }
-    pub fn run(&mut self, mut reactor: impl FnMut()) {
+    fn poll_ready(&mut self) -> usize {
+        let mut completed = 0;
+        // Bound each phase so self-waking tasks cannot starve I/O or timers.
+        for _ in 0..CAP {
+            let Some(id) = self.ready.borrow_mut().pop() else {
+                break;
+            };
+            let Some(task) = self.tasks.get_mut(id).and_then(Option::as_mut) else {
+                continue;
+            };
+            let w = &self.timers.slots[id].waker;
+            if task.as_mut().poll(&mut Context::from_waker(w)).is_ready() {
+                self.tasks[id] = None;
+                self.timers.disarm(id);
+                completed += 1;
+            }
+        }
+        completed
+    }
+    pub fn run(&mut self, reactor: impl FnMut()) {
+        self.run_with_maintenance(reactor, || {});
+    }
+    /// Run background work after both reply and timer wakeups have been polled.
+    pub fn run_with_maintenance(
+        &mut self,
+        mut reactor: impl FnMut(),
+        mut maintenance: impl FnMut(),
+    ) {
         let prev = HOME.with(|h| {
             h.replace(Some(Home {
                 base: self.base,
@@ -207,6 +234,8 @@ impl Runtime {
         let mut live = self.tasks.iter().filter(|f| f.is_some()).count();
         while live != 0 {
             reactor();
+            // Deliver ready replies before checking unrelated timer/foreign wakes.
+            live -= self.poll_ready();
             self.timers.fire((self.clock)());
             for (word, bits) in self.foreign.bits.iter().enumerate() {
                 if bits.load(Ordering::Relaxed) != 0 {
@@ -218,22 +247,8 @@ impl Runtime {
                     }
                 }
             }
-            // A bounded turn lets the reactor run even if a future self-wakes forever.
-            // All tasks woken by this reactor/timer turn fit within CAP polls.
-            for _ in 0..CAP {
-                let Some(id) = self.ready.borrow_mut().pop() else {
-                    break;
-                };
-                let Some(task) = self.tasks.get_mut(id).and_then(Option::as_mut) else {
-                    continue;
-                };
-                let w = &self.timers.slots[id].waker;
-                if task.as_mut().poll(&mut Context::from_waker(w)).is_ready() {
-                    self.tasks[id] = None;
-                    self.timers.disarm(id);
-                    live -= 1;
-                }
-            }
+            live -= self.poll_ready();
+            maintenance();
         }
     }
 }
@@ -297,27 +312,26 @@ impl Drop for Sleep<'_> {
 
 /// Single-consumer rendezvous slot. A full slot rejects duplicates without replacing its mbuf.
 pub struct Slot<T> {
-    value: RefCell<Option<T>>,
-    waker: RefCell<Option<Waker>>,
+    value: Cell<Option<T>>,
+    waker: Cell<Option<Waker>>,
 }
 impl<T> Default for Slot<T> {
     fn default() -> Self {
         Self {
-            value: RefCell::new(None),
-            waker: RefCell::new(None),
+            value: Cell::new(None),
+            waker: Cell::new(None),
         }
     }
 }
 impl<T> Slot<T> {
     pub fn deliver(&self, value: T) -> Result<(), T> {
-        let mut slot = self.value.borrow_mut();
-        if slot.is_some() {
+        if let Some(previous) = self.value.take() {
+            self.value.set(Some(previous));
             return Err(value);
         }
-        *slot = Some(value);
-        drop(slot);
-        if let Some(w) = self.waker.borrow().as_ref() {
-            w.wake_by_ref();
+        self.value.set(Some(value));
+        if let Some(w) = self.waker.take() {
+            w.wake();
         }
         Ok(())
     }
@@ -337,22 +351,19 @@ pub struct Receive<'a, T> {
 impl<T> Future for Receive<'_, T> {
     type Output = Result<T, Timeout>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if let Some(value) = self.slot.value.borrow_mut().take() {
+        if let Some(value) = self.slot.value.take() {
             return Poll::Ready(Ok(value));
         }
         if Pin::new(&mut self.timer).poll(cx).is_ready() {
             return Poll::Ready(Err(Timeout));
         }
-        let mut w = self.slot.waker.borrow_mut();
-        if w.as_ref().is_none_or(|w| !w.will_wake(cx.waker())) {
-            *w = Some(cx.waker().clone());
-        }
+        self.slot.waker.set(Some(cx.waker().clone()));
         Poll::Pending
     }
 }
 impl<T> Drop for Receive<'_, T> {
     fn drop(&mut self) {
-        self.slot.waker.borrow_mut().take();
+        self.slot.waker.take();
     }
 }
 
@@ -415,6 +426,71 @@ mod tests {
             }
         });
         assert_eq!(observed.get(), 2);
+    }
+    #[test]
+    fn reply_runs_before_clock_check_and_maintenance() {
+        thread_local! { static READS: Cell<usize> = const { Cell::new(0) }; }
+        fn clock() -> u64 {
+            READS.with(|n| n.set(n.get() + 1));
+            now()
+        }
+        TIME.with(|t| t.set(0));
+        READS.with(|n| n.set(0));
+        let slot = Rc::new(Slot::default());
+        let receiver = slot.clone();
+        let done = Rc::new(Cell::new(false));
+        let end = done.clone();
+        let mut rt = Runtime::new(1, clock);
+        rt.spawn(move |mut h| async move {
+            let reads_at_delivery = receiver.recv(&mut h, 10).await.unwrap();
+            assert_eq!(READS.with(Cell::get), reads_at_delivery);
+            end.set(true);
+        });
+        rt.run_with_maintenance(
+            || {
+                TIME.with(|t| t.set(t.get() + 1));
+                if now() == 2 {
+                    slot.deliver(READS.with(Cell::get)).unwrap();
+                }
+            },
+            || {
+                if now() == 2 {
+                    assert!(done.get());
+                }
+            },
+        );
+        assert!(done.get());
+    }
+    #[test]
+    fn self_wakes_do_not_starve_reactor_timers_or_maintenance() {
+        TIME.with(|t| t.set(0));
+        let fired_at = Rc::new(Cell::new(0));
+        let end = fired_at.clone();
+        let mut rt = Runtime::new(2, now);
+        let mut polls = 0;
+        rt.spawn(move |_| {
+            std::future::poll_fn(move |cx| {
+                polls += 1;
+                assert!(polls < CAP * 8, "reactor was starved");
+                if now() >= 3 {
+                    Poll::Ready(())
+                } else {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            })
+        });
+        rt.spawn(move |mut h| async move {
+            h.sleep_until(2).await;
+            end.set(now());
+        });
+        let mut maintenance_turns = 0;
+        rt.run_with_maintenance(
+            || TIME.with(|t| t.set(t.get() + 1)),
+            || maintenance_turns += 1,
+        );
+        assert_eq!(fired_at.get(), 2);
+        assert_eq!(maintenance_turns, 3);
     }
     #[test]
     fn dedup_self_wake_and_stale_identity() {

@@ -1,0 +1,111 @@
+{
+  "accounted": true,
+  "client": "A",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_replied": 0,
+    "arp_tx_failed": 0,
+    "duplicate": 0,
+    "foreign": 10,
+    "late_reply": 0,
+    "rx": 1986847,
+    "timeout": 0,
+    "tx": 1986847,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 20.00061313643862,
+  "histogram_relative_error_max": 0.015625,
+  "latency": {
+    "end_to_end": {
+      "count": 1986847,
+      "max": 409743,
+      "p50": 159114,
+      "p90": 163841,
+      "p99": 245761,
+      "p999": 252063,
+      "p9999": 299325
+    },
+    "process": {
+      "count": 1986847,
+      "max": 26250,
+      "p50": 251,
+      "p90": 461,
+      "p99": 701,
+      "p999": 861,
+      "p9999": 1845
+    },
+    "receive": {
+      "count": 1986847,
+      "max": 25460,
+      "p50": 161,
+      "p90": 261,
+      "p99": 362,
+      "p999": 455,
+      "p9999": 1181
+    },
+    "send": {
+      "count": 1986847,
+      "max": 25670,
+      "p50": 80,
+      "p90": 270,
+      "p99": 510,
+      "p999": 651,
+      "p9999": 775
+    },
+    "sleep_error": {
+      "count": 1986847,
+      "max": 37805,
+      "p50": 145,
+      "p90": 645,
+      "p99": 1131,
+      "p999": 1870,
+      "p9999": 7778
+    },
+    "timer": {
+      "count": 1986783,
+      "max": 38045,
+      "p50": 195,
+      "p90": 695,
+      "p99": 1328,
+      "p999": 2091,
+      "p9999": 7975
+    }
+  },
+  "losses": [],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "nic": {
+    "missed": 0,
+    "rx": 1986857,
+    "rx_errors": 0,
+    "rx_nombuf": 0,
+    "tx": 1987214,
+    "tx_errors": 0
+  },
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 500,
+    "duration_sec": 20,
+    "output": "results/runtime-optimization/ready-a.json",
+    "payload": 64,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 64,
+    "src_ip": "10.202.15.210",
+    "timeout_us": 10000
+  },
+  "tsc_hz": 2599975959,
+  "units": "ns"
+}

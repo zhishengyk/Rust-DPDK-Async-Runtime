@@ -61,18 +61,20 @@ fn run() -> Result<(), String> {
         runtime.spawn(move |handle| session(sid, handle, task_io, slot));
     }
     io.borrow_mut().start();
-    runtime.run(|| {
-        let mut io = io.borrow_mut();
-        let (batch, t2) = io.port.receive();
-        for packet in batch {
-            if let Some((sid, reply)) = io.dispatch(packet, t2) {
-                if slots[sid].deliver(reply).is_err() {
-                    io.counters.duplicate += 1;
+    runtime.run_with_maintenance(
+        || {
+            let mut io = io.borrow_mut();
+            let (batch, t2) = io.port.receive();
+            for packet in batch {
+                if let Some((sid, reply)) = io.dispatch(packet, t2) {
+                    if slots[sid].deliver(reply).is_err() {
+                        io.counters.duplicate += 1;
+                    }
                 }
             }
-        }
-        io.maintenance();
-    });
+        },
+        || io.borrow_mut().maintenance(),
+    );
     drop(runtime);
     drop(slots);
     Rc::try_unwrap(io).ok().unwrap().into_inner().finish("A")
