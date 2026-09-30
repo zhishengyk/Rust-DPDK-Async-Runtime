@@ -3,6 +3,10 @@ name = "raw-ping"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "raw-ping"
+path = "../../src/raw_ping.rs"
+
 [dependencies]
 ping-common = { path = "../../crates/ping-common" }
 metrics = { path = "../../crates/metrics" }

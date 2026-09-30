@@ -2,3 +2,6 @@
 name = "rt"
 version.workspace = true
 edition.workspace = true
+
+[lib]
+path = "../../src/rt.rs"

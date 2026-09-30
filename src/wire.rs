@@ -1,5 +1,8 @@
+//! 固定格式的 Ethernet/IPv4/ICMP 编解码及 ARP 应答，供 A/B 共用。
+//! 仅实现实验需要的无 IP options、无分片报文；应用标识由 ICMP id、seq 和 payload 内的 T0 组成。
 #![forbid(unsafe_code)]
 
+// ICMP identifier = BASE_ID + session，回包时可直接映射到会话槽。
 pub const BASE_ID: u16 = 0x4000;
 #[derive(Clone, Copy)]
 pub struct Network {
@@ -12,6 +15,7 @@ fn word(p: &[u8], at: usize) -> u16 {
     u16::from_be_bytes([p[at], p[at + 1]])
 }
 fn sum(bytes: &[u8]) -> u32 {
+    // Internet checksum 按网络字节序累加 16 位字；奇数字节数时末尾补零。
     bytes
         .chunks(2)
         .map(|p| ((p[0] as u32) << 8) | p.get(1).copied().unwrap_or(0) as u32)
@@ -27,6 +31,7 @@ pub fn checksum(bytes: &[u8]) -> u16 {
     finish(sum(bytes))
 }
 
+/// 每个 session 一份可复用字节模板；它是普通 Vec，不持有 DPDK mbuf。
 pub struct TxTemplate {
     frame: Vec<u8>,
     base: u32,
@@ -34,13 +39,14 @@ pub struct TxTemplate {
 impl TxTemplate {
     pub fn new(net: Network, session: usize, payload: usize) -> Self {
         assert!((8..=1472).contains(&payload));
+        // 帧布局：Ethernet 14B + IPv4 20B + ICMP 8B + payload；payload 前 8B 存 T0。
         let mut p = vec![0; 42 + payload];
         p[0..6].copy_from_slice(&net.peer_mac);
         p[6..12].copy_from_slice(&net.mac);
         p[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
         p[14] = 0x45;
         p[16..18].copy_from_slice(&((28 + payload) as u16).to_be_bytes());
-        p[20] = 0x40; // Don't fragment.
+        p[20] = 0x40; // DF：不允许 IP 分片。
         p[22] = 64;
         p[23] = 1;
         p[26..30].copy_from_slice(&net.ip);
@@ -50,13 +56,14 @@ impl TxTemplate {
         p[34] = 8;
         p[38..40].copy_from_slice(&(BASE_ID + session as u16).to_be_bytes());
         p[50..].fill(0xa5);
+        // 此时 checksum、seq、T0 均为零，缓存所有不变 ICMP 字节的累加和。
         let base = sum(&p[34..]);
         Self { frame: p, base }
     }
-    /// Update only the changing words; no full-payload checksum on transmit.
+    /// 每包只更新 seq/T0，并在固定部分的和上加新值，避免重新扫描整个 payload。
     pub fn emit(&mut self, seq: u16, t0: u64) -> &[u8] {
         self.frame[40..42].copy_from_slice(&seq.to_be_bytes());
-        self.frame[42..50].copy_from_slice(&t0.to_le_bytes());
+        self.frame[42..50].copy_from_slice(&t0.to_le_bytes()); // 应用 payload 自定小端，解析时对应还原。
         let c = finish(self.base + seq as u32 + sum(&self.frame[42..50]));
         self.frame[36..38].copy_from_slice(&c.to_be_bytes());
         &self.frame
@@ -70,6 +77,7 @@ pub enum Packet {
     Other,
 }
 pub fn classify(p: &[u8], net: Network, sessions: usize) -> Packet {
+    // 先验证长度再按固定偏移读取；这些检查保证切片访问安全，也排除无关帧。
     if p.len() < 42 {
         return Packet::Other;
     }
@@ -82,6 +90,7 @@ pub fn classify(p: &[u8], net: Network, sessions: usize) -> Packet {
     {
         return Packet::Arp;
     }
+    // 只接纳指定对端发往本机的 IPv4 ICMP Echo Reply（type=0, code=0）。
     if p.len() < 50
         || word(p, 12) != 0x0800
         || p[14] != 0x45
@@ -109,6 +118,7 @@ pub fn classify(p: &[u8], net: Network, sessions: usize) -> Packet {
         t0: u64::from_le_bytes(p[42..50].try_into().unwrap()),
     }
 }
+/// 调用前已由 classify 确认为发给本机的 ARP request；直接在原缓冲区内改成 reply。
 pub fn arp_reply(p: &mut [u8], net: Network) {
     let peer_mac: [u8; 6] = p[22..28].try_into().unwrap();
     let peer_ip: [u8; 4] = p[28..32].try_into().unwrap();

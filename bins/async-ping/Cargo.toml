@@ -3,6 +3,10 @@ name = "async-ping"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "async-ping"
+path = "../../src/async_ping.rs"
+
 [dependencies]
 ping-common = { path = "../../crates/ping-common" }
 metrics = { path = "../../crates/metrics" }

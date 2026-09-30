@@ -1,3 +1,5 @@
+//! A/B 共用的会话 I/O、请求匹配和统计；差异留在 async 调度与手写状态机中。
+//! T0 在 send 入口，T1/T2 在 C shim 的 TX/RX 返回处，T3 由各客户端在收到 reply 时记录。
 #![forbid(unsafe_code)]
 use clap::Parser;
 use dpdk::{Mbuf, Port};
@@ -54,6 +56,7 @@ pub struct Counters {
     pub alloc_failed: u64,
 }
 #[derive(Clone, Copy)]
+/// 一次成功提交的 request；内部时间都使用 TSC ticks，输出报告时才转换为 ns。
 pub struct Stamp {
     pub seq: u16,
     pub t0: u64,
@@ -61,10 +64,12 @@ pub struct Stamp {
     pub deadline: u64,
     pub late_seen: bool,
 }
+/// 接收缓冲区及整批收包的 T2；移动 Reply 就转移 mbuf 所有权，不复制包内容。
 pub struct Reply {
     pub mbuf: Mbuf,
     pub t2: u64,
 }
+/// 保存四个打点及 RX mbuf，让客户端在 sleep 后再做统计和释放。
 pub struct Sample {
     pub reply: Reply,
     pub stamp: Stamp,
@@ -83,6 +88,7 @@ pub struct Shared {
     pub net: Network,
     pub clock: Clock,
     pub templates: Vec<TxTemplate>,
+    // 每个 session 当前唯一的在途请求；seq + t0 一起匹配，防止 seq 回绕后接纳旧包。
     pub expected: Vec<Option<Stamp>>,
     pub counters: Counters,
     pub hist: Histograms,
@@ -109,6 +115,7 @@ impl Shared {
             .collect();
         let delay = clock.us(options.delay_us);
         let timeout = clock.us(options.timeout_us);
+        // open 时暂存持续 ticks；start 时加上起点，转换成绝对结束时间。
         let end = options
             .duration_sec
             .checked_mul(clock.hz)
@@ -137,12 +144,13 @@ impl Shared {
         self.next_maintenance = self.start + self.clock.us(1000);
     }
     pub fn phase(&self, sid: usize) -> u64 {
+        // 只错开首发；后续都是收到 reply/超时后再等 delay，不追赶固定发送节拍。
         self.start + self.delay * sid as u64 / self.options.sessions as u64
     }
-    /// Both clients call exactly this send path; T0 precedes alloc/copy/patch/TX.
+    /// A/B 使用同一发送路径；T0 包含模板更新、mbuf 分配、复制与 TX 提交的耗时。
     #[inline]
     pub fn send(&mut self, sid: usize, seq: u16, sleep_deadline: Option<u64>) -> Option<Stamp> {
-        let t0 = now();
+        let t0 = now(); // T0：本次决定发送；失败的提交不生成 reply 延迟样本。
         let frame = self.templates[sid].emit(seq, t0);
         let Some(mut packet) = self.port.alloc(frame.len()) else {
             self.counters.alloc_failed += 1;
@@ -160,20 +168,22 @@ impl Shared {
             seq,
             t0,
             t1,
-            deadline: t1 + self.timeout,
+            deadline: t1 + self.timeout, // 从 TX 提交返回时开始等待 reply。
             late_seen: false,
         };
         self.expected[sid] = Some(stamp);
         self.counters.tx += 1;
         if let Some(deadline) = sleep_deadline {
+            // 段③：上次 sleep 到期 → 下一次 T0，包含恢复后统计/释放等工作，单独报告。
             self.hist.timer.record(t0 - deadline);
         }
         Some(stamp)
     }
-    /// Common parsing, demultiplexing and stale-reply validation, before T3.
+    /// T3 之前共用的解析、session 分拣和请求匹配；未交付的 mbuf 随局部变量 Drop 释放。
     pub fn dispatch(&mut self, mut mbuf: Mbuf, t2: u64) -> Option<(usize, Reply)> {
         match wire::classify(mbuf.data(), self.net, self.options.sessions as usize) {
             Packet::Arp => {
+                // DPDK 接管的端口没有内核代答 ARP，复用收到的缓冲区原地生成应答。
                 wire::arp_reply(mbuf.data_mut(), self.net);
                 if self.port.send(mbuf).is_ok() {
                     self.counters.arp_replied += 1;
@@ -185,6 +195,7 @@ impl Shared {
             Packet::Reply { session, seq, t0 } => {
                 if let Some(s) = self.expected[session].as_mut() {
                     if s.seq == seq && s.t0 == t0 {
+                        // 用收到这一批包的 T2 判定是否超时，不把排队到 T3 的时间算作网络迟到。
                         if t2 <= s.deadline {
                             return Some((session, Reply { mbuf, t2 }));
                         }
@@ -197,6 +208,7 @@ impl Shared {
                         return None;
                     }
                 }
+                // 已经结束的请求仍可能收到迟到包：补记 loss，但不再交给当前 session。
                 if let Some(loss) = self
                     .losses
                     .iter_mut()
@@ -217,6 +229,7 @@ impl Shared {
         self.counters.rx += 1;
     }
     pub fn timed_out(&mut self, sid: usize) {
+        // 超时不进入成功 reply 的延迟分布；保留请求身份，结束时对账迟到/失踪情况。
         let stamp = self.expected[sid].take().unwrap();
         self.counters.timeout += 1;
         self.losses.push(Loss {
@@ -234,13 +247,15 @@ impl Shared {
     pub fn maintenance(&mut self) {
         let t = now();
         if t >= self.next_maintenance {
+            // 每 1ms 服务一次 DPDK timer（含 ENA watchdog）；不是本项目的 sleep timer。
+            // 调用方把它放在 reply 交付后，保留驱动维护而不阻塞当前回包恢复。
             self.port.maintenance();
             self.next_maintenance = t + self.clock.us(1000);
         }
     }
     pub fn finish(mut self, label: &str) -> Result<(), String> {
         let measured_end = now();
-        // Tasks have finished their last timeout and sleep. Account late packets too.
+        // 各 session 已结束最后一次等待和 sleep；额外收尾 50ms 补记迟到包，不计入运行时长。
         let drain_end = now() + self.clock.us(50_000);
         while now() < drain_end {
             let (batch, t2) = self.port.receive();
@@ -250,9 +265,11 @@ impl Shared {
             self.maintenance();
         }
         let nic = self.port.stats();
-        let (initial, final_count) = self.port.finish(); // Stop/close returns RX descriptors and pending TX.
+        // 停止/关闭端口后，RX 描述符和未回收的 TX mbuf 才会归还内存池。
+        let (initial, final_count) = self.port.finish();
         let missing = self.losses.iter().filter(|l| !l.late).count();
         let latency = self.hist.summaries(self.clock);
+        // 每个成功提交的 request 必须落在成功或超时之一；迟到是超时的补充分类。
         let accounted = self.counters.tx == self.counters.rx + self.counters.timeout;
         let report = serde_json::json!({
             "client": label, "options": self.options, "tsc_hz": self.clock.hz,

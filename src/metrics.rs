@@ -1,12 +1,14 @@
+//! 共享计时与直方图：热路径记录 TSC ticks，结束后统一换算为纳秒并计算分位数。
 use serde::Serialize;
 use std::time::{Duration, Instant};
 
-/// Ordered on both sides; the asm memory clobber also prevents compiler motion.
+/// 读取本地 CPU 的 TSC；前后 LFENCE 约束执行顺序，asm 的内存副作用约束编译器移动。
+/// 与 C shim 使用相同序列，不能通过去掉 fence 来降低测得的延迟。
 #[inline(always)]
 pub fn now() -> u64 {
     let lo: u32;
     let hi: u32;
-    // SAFETY: x86_64 supports LFENCE/RDTSC; no pointers or memory are accessed.
+    // SAFETY: 目标 x86_64 支持 LFENCE/RDTSC；此汇编不访问指针或内存。
     unsafe {
         std::arch::asm!("lfence", "rdtsc", "lfence", out("eax") lo, out("edx") hi,
             options(nostack, preserves_flags));
@@ -20,6 +22,7 @@ pub struct Clock {
 }
 impl Clock {
     pub fn calibrate() -> Self {
+        // 用单调时钟校准 TSC 频率，仅启动时执行；TSC ticks 不等同于 CPU 当前主频周期。
         let start = Instant::now();
         let a = now();
         std::thread::sleep(Duration::from_millis(500));
@@ -36,7 +39,8 @@ impl Clock {
     }
 }
 
-/// Exact below 128 cycles; 64 sub-buckets per power of two above that.
+/// 小于 128 ticks 时精确记录；更大值按 2 的幂划区间，每区间 64 桶。
+/// 分位数取桶上界，误差约不超过 1.6%；max 单独保存原始最大值，不受桶宽影响。
 pub struct Histogram {
     bins: Box<[u64; 4096]>,
     count: u64,
@@ -78,6 +82,7 @@ impl Histogram {
         if self.count == 0 {
             return 0;
         }
+        // 用十万分位表示 p99.99，避免热路径浮点计算或保存全部样本。
         let target = (self.count * numerator).div_ceil(100_000);
         let mut sum = 0;
         for (i, n) in self.bins.iter().enumerate() {
@@ -112,9 +117,13 @@ pub struct Summary {
 }
 #[derive(Default)]
 pub struct Histograms {
+    /// 排名使用的进程内耗时：每个样本的发送段与接收段之和。
     pub process: Histogram,
+    /// T3 − T0，包含本地收发、网络和对端处理，不含 reply 后的 sleep。
     pub end_to_end: Histogram,
+    /// sleep deadline → 下一次 T0，单独报告，不进入 process。
     pub timer: Histogram,
+    /// sleep deadline → sleep 恢复后的打点，比 timer 少了后续统计和下一轮发送前的工作。
     pub sleep_error: Histogram,
     pub send: Histogram,
     pub receive: Histogram,
@@ -123,6 +132,7 @@ impl Histograms {
     pub fn reply(&mut self, t0: u64, t1: u64, t2: u64, t3: u64) {
         self.send.record(t1 - t0);
         self.receive.record(t3 - t2);
+        // 先逐样本相加再求分位数，不能用 send.p99 + receive.p99 替代 process.p99。
         self.process.record(t1 - t0 + t3 - t2);
         self.end_to_end.record(t3 - t0);
     }

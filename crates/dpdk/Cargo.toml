@@ -3,6 +3,9 @@ name = "dpdk"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+path = "../../src/dpdk.rs"
+
 [dependencies]
 dpdk-sys = { path = "../dpdk-sys" }
 arrayvec = "0.7"

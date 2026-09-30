@@ -51,6 +51,28 @@ sudo target/release/async-ping --bdf "$BDF" --src-ip "$SRC_IP" \
 
 ## 架构
 
+所有 Rust 源码集中在根目录的 `src/`，review 时从这里阅读：
+
+```text
+src/
+├── async_ping.rs   A：async 会话与收包 reactor
+├── raw_ping.rs     B：手写状态机
+├── ping_common.rs  A/B 共用收发、请求匹配与统计
+├── rt.rs           executor、Waker、timer、reply 槽
+├── dpdk.rs         mbuf/端口的安全封装
+├── dpdk_sys.rs     C FFI 绑定入口
+├── dpdk_build.rs   C shim 编译与绑定生成
+├── wire.rs         ICMP/ARP 报文编解码
+└── metrics.rs      TSC 计时与直方图
+native/
+├── shim.c          DPDK 调用与 T1/T2 打点
+└── shim.h          C ABI 声明
+```
+
+`crates/*` 和 `bins/*` 仅存放 `Cargo.toml`，通过显式路径引用上述源码。
+保留 crate 边界，使 `rt` 可脱离 DPDK 独立编译测试，B 仍不依赖 `rt`；运行命令不变。
+建议阅读顺序：`async_ping.rs` → `ping_common.rs` → `rt.rs` → `raw_ping.rs`，再看底层封装。
+
 ```text
 async-ping -> rt (std only)
     |          executor / Waker / timers / Slot<T>
@@ -155,6 +177,8 @@ python3 scripts/compare.py results/a-600.json results/b-600.json
 优化前的结果见 [原始实测报告](results/REPORT.md)，本次配置调整及对照结果见
 [延迟优化报告](results/optimization/REPORT.md)；原始终端日志及完整 JSON 一并保留。
 后续 runtime 调度与 reply 槽优化见 [runtime 优化报告](results/runtime-optimization/REPORT.md)。
+进一步的队列、timer 引用和 future 类型试验见 [第二轮探索](results/runtime-round2/REPORT.md)；
+这些候选未显示稳定收益，未纳入实现。
 
 ## C 的可比性
 
@@ -193,7 +217,7 @@ rustup toolchain install nightly-2025-09-18 --profile minimal --component miri
 MIRIFLAGS=-Zmiri-strict-provenance cargo +nightly-2025-09-18 miri test -p rt -p wire --locked
 
 # 任务书“grep”要求（原文 §5 没有给命令，按禁用依赖列表自证）
-grep -rEn 'tokio|async-std|smol|glommio|monoio|LocalPool|block_on' Cargo.lock crates bins
+rg -n 'tokio|async-std|smol|glommio|monoio|LocalPool|block_on' Cargo.lock src
 # 实测：无输出，退出码 1。
 ```
 
@@ -203,7 +227,7 @@ reply/timeout、重复唤醒、跨线程唤醒、runtime 销毁后的 Waker。
 
 换 ENI：恢复旧卡，删除或修改 `env.sh` 的 BDF/SRC_IP/DPDK_IF，再运行 prepare-host。
 本机 MAC 自动读取；对端地址在 env.sh。换非 ENA 卡还要修改 setup.sh 的 `enable_drivers`；
-队列深度 512、单端口/单队列/offload=0 集中在 `crates/dpdk-sys/shim.c::w_port_start`。
+队列深度 512、单端口/单队列/offload=0 集中在 `native/shim.c::w_port_start`。
 大于 MTU 的 payload、不可信网络中的完整协议校验、多核、热插拔、故障重连均不在本项目范围。
 
 参考：[DPDK ENA 文档](https://doc.dpdk.org/guides-23.11/nics/ena.html)、

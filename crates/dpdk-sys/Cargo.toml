@@ -3,6 +3,10 @@ name = "dpdk-sys"
 version.workspace = true
 edition.workspace = true
 links = "dpdk"
+build = "../../src/dpdk_build.rs"
+
+[lib]
+path = "../../src/dpdk_sys.rs"
 
 [build-dependencies]
 cc = "1"

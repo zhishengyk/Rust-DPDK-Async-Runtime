@@ -3,6 +3,9 @@ name = "ping-common"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+path = "../../src/ping_common.rs"
+
 [dependencies]
 dpdk = { path = "../dpdk" }
 metrics = { path = "../metrics" }

@@ -1,5 +1,6 @@
-//! Single-threaded poll-mode executor. Clock and reactor are supplied by the caller.
-//! Tasks are allocated at spawn; no allocation, locking or atomic RMW on local wake.
+//! 单线程、主动轮询的 executor；时钟和收包 reactor 由调用者提供，不依赖 DPDK。
+//! 一轮执行顺序：收包并唤醒 → poll 就绪任务 → 检查 timer/跨线程唤醒 → 再 poll → 维护。
+//! task 仅在 spawn 时分配；本线程 wake 只入就绪队列，不分配、不加锁、不做原子读改写。
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -15,6 +16,7 @@ use std::{
 const CAP: usize = 128;
 type Task = Pin<Box<dyn Future<Output = ()>>>;
 
+// 定长 FIFO：每个 task 最多入队一次，因此 CAP 个任务不会撑满后再溢出。
 struct Ready {
     ring: [usize; CAP],
     head: usize,
@@ -44,10 +46,12 @@ impl Ready {
         let id = self.ring[self.head];
         self.head = (self.head + 1) % CAP;
         self.len -= 1;
+        // poll 前解除去重标记，允许任务在自己的 poll 中再次 wake 自己。
         self.queued[id] = false;
         Some(id)
     }
 }
+// Waker 可以跨线程使用，但外部线程只能置位；Future 始终在所属线程上 poll。
 struct Foreign {
     bits: [AtomicU64; 2],
 }
@@ -61,6 +65,7 @@ struct Home {
     base: usize,
     ready: Rc<RefCell<Ready>>,
 }
+// 只通过 TLS 访问 Rc 就绪队列，绝不把它的指针交给外部线程。
 thread_local! { static HOME: RefCell<Option<Home>> = const { RefCell::new(None) }; }
 struct HomeGuard(Option<Home>);
 impl Drop for HomeGuard {
@@ -70,6 +75,7 @@ impl Drop for HomeGuard {
 }
 
 fn wake(token: usize) {
+    // 常见路径：当前 runtime 的任务直接入队，同一轮就能恢复执行。
     let local = HOME
         .try_with(|home| {
             let home = home.borrow();
@@ -85,6 +91,7 @@ fn wake(token: usize) {
         })
         .unwrap_or(false);
     if !local {
+        // 外部/其他 runtime 的唤醒经注册表转交；Weak 不延长 runtime 的生命期。
         let reg = registry().lock().unwrap();
         if let Some((f, id)) = reg.get(&token) {
             if let Some(f) = f.upgrade() {
@@ -93,9 +100,9 @@ fn wake(token: usize) {
         }
     }
 }
-// SAFETY: data is an integer identity, never dereferenced. IDs are never reused.
-// Local access is TLS-only; foreign access uses a synchronized registry and bitset.
-// A stale Waker (including one that outlives Runtime) is therefore a harmless no-op.
+// SAFETY: data 只是永不复用的整数身份，不是可解引用的对象指针。
+// 本线程走 TLS，其他线程走锁和原子位图；runtime 销毁后查不到身份，旧 Waker 无效。
+// clone/drop 无须管理引用计数，因为这个整数身份本身不拥有内存。
 unsafe fn clone_raw(p: *const ()) -> RawWaker {
     RawWaker::new(p, &VTABLE)
 }
@@ -110,11 +117,13 @@ fn waker(token: usize) -> Waker {
 }
 
 struct TimerSlot {
+    // u64::MAX 表示未注册；每个 task 固定占用一个槽。
     deadline: Cell<u64>,
     waker: Waker,
 }
 struct Timers {
     slots: Vec<TimerSlot>,
+    // 缓存最早 deadline；尚未到期时无须扫描所有槽。
     next: Cell<u64>,
 }
 impl Timers {
@@ -123,6 +132,7 @@ impl Timers {
         self.next.set(self.next.get().min(deadline));
     }
     fn disarm(&self, id: usize) {
+        // 不重算 next：旧值只会让后续多扫描一次，不会错过真正的到期时间。
         self.slots[id].deadline.set(u64::MAX);
     }
     fn fire(&self, now: u64) {
@@ -143,6 +153,7 @@ impl Timers {
     }
 }
 
+/// 最多 128 个任务的单线程运行时；所有任务在 run 之前创建。
 pub struct Runtime {
     base: usize,
     ready: Rc<RefCell<Ready>>,
@@ -155,6 +166,7 @@ impl Runtime {
     pub fn new(capacity: usize, clock: fn() -> u64) -> Self {
         assert!((1..=CAP).contains(&capacity));
         static NEXT: AtomicUsize = AtomicUsize::new(1);
+        // 每个 runtime 独占一段身份，避免旧 Waker 误唤醒新 runtime 的同号任务。
         let base = NEXT
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(CAP))
             .expect("waker IDs exhausted");
@@ -184,7 +196,7 @@ impl Runtime {
             clock,
         }
     }
-    /// Fixed slots, spawned before run. Task IDs are not recycled within a runtime.
+    /// 为任务分配固定槽并首次入队；Pin<Box<_>> 保证跨 await 保存的数据地址稳定。
     pub fn spawn<F: Future<Output = ()> + 'static>(&mut self, make: impl FnOnce(Handle) -> F) {
         let id = self.tasks.len();
         assert!(id < self.timers.slots.len());
@@ -198,12 +210,13 @@ impl Runtime {
     }
     fn poll_ready(&mut self) -> usize {
         let mut completed = 0;
-        // Bound each phase so self-waking tasks cannot starve I/O or timers.
+        // 每阶段限制 poll 次数，避免不断自唤醒的任务饿死收包、timer 和维护。
         for _ in 0..CAP {
             let Some(id) = self.ready.borrow_mut().pop() else {
                 break;
             };
             let Some(task) = self.tasks.get_mut(id).and_then(Option::as_mut) else {
+                // 已完成任务可能仍有旧的 wake 留在队列中。
                 continue;
             };
             let w = &self.timers.slots[id].waker;
@@ -218,7 +231,7 @@ impl Runtime {
     pub fn run(&mut self, reactor: impl FnMut()) {
         self.run_with_maintenance(reactor, || {});
     }
-    /// Run background work after both reply and timer wakeups have been polled.
+    /// 先交付 reply，再处理 timer，最后做维护；维护仍在当前线程执行。
     pub fn run_with_maintenance(
         &mut self,
         mut reactor: impl FnMut(),
@@ -234,9 +247,10 @@ impl Runtime {
         let mut live = self.tasks.iter().filter(|f| f.is_some()).count();
         while live != 0 {
             reactor();
-            // Deliver ready replies before checking unrelated timer/foreign wakes.
+            // 回包已到手就立即恢复 task，不在 T2 → T3 之间插入 timer 扫描或网卡维护。
             live -= self.poll_ready();
             self.timers.fire((self.clock)());
+            // Acquire 与外部 wake 的 Release 配对，接收它在唤醒前发布的数据。
             for (word, bits) in self.foreign.bits.iter().enumerate() {
                 if bits.load(Ordering::Relaxed) != 0 {
                     let mut value = bits.swap(0, Ordering::Acquire);
@@ -261,7 +275,7 @@ impl Drop for Runtime {
     }
 }
 
-/// Unique per task: &mut borrowing enforces one pending timer per task.
+/// 每个 task 独享一个 Handle；&mut 借用保证同一时刻最多存在一个等待中的 timer。
 pub struct Handle {
     id: usize,
     timers: Rc<Timers>,
@@ -282,6 +296,7 @@ impl Handle {
         self.sleep_until(self.now() + ticks)
     }
 }
+/// 到期返回原 deadline，调用者用它计算唤醒误差，而非把恢复时刻当作到期时刻。
 pub struct Sleep<'a> {
     handle: &'a mut Handle,
     deadline: u64,
@@ -304,13 +319,14 @@ impl Future for Sleep<'_> {
 }
 impl Drop for Sleep<'_> {
     fn drop(&mut self) {
+        // 等待 reply 被提前完成或 future 被取消时，也要撤销原先的超时 timer。
         if self.armed {
             self.handle.timers.disarm(self.handle.id);
         }
     }
 }
 
-/// Single-consumer rendezvous slot. A full slot rejects duplicates without replacing its mbuf.
+/// 单线程、单消费者的交接槽；槽已满时拒绝新值，保留第一个 reply 及其 mbuf。
 pub struct Slot<T> {
     value: Cell<Option<T>>,
     waker: Cell<Option<Waker>>,
@@ -330,6 +346,7 @@ impl<T> Slot<T> {
             return Err(value);
         }
         self.value.set(Some(value));
+        // 先放数据再唤醒；wake 只入队，不会在 deliver 内重入 poll。
         if let Some(w) = self.waker.take() {
             w.wake();
         }
@@ -351,6 +368,7 @@ pub struct Receive<'a, T> {
 impl<T> Future for Receive<'_, T> {
     type Output = Result<T, Timeout>;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // reply 优先：即使本次 poll 已过 deadline，已被 reactor 接纳的回包仍交给任务。
         if let Some(value) = self.slot.value.take() {
             return Poll::Ready(Ok(value));
         }
@@ -358,17 +376,20 @@ impl<T> Future for Receive<'_, T> {
             return Poll::Ready(Err(Timeout));
         }
         self.slot.waker.set(Some(cx.waker().clone()));
+        // 槽与 reactor 在同一线程，两步间不会并发投递，所以无需锁或二次检查。
         Poll::Pending
     }
 }
 impl<T> Drop for Receive<'_, T> {
     fn drop(&mut self) {
+        // 完成或取消等待时移除订阅；timer 字段随后 Drop，自动取消超时。
         self.slot.waker.take();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    // 用手动推进的时钟验证调度与取消语义，不依赖真实时间或网卡。
     use super::*;
     thread_local! { static TIME: Cell<u64> = const { Cell::new(0) }; }
     fn now() -> u64 {
