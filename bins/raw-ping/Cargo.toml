@@ -1,0 +1,8 @@
+[package]
+name = "raw-ping"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ping-common = { path = "../../crates/ping-common" }
+metrics = { path = "../../crates/metrics" }

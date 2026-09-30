@@ -1,0 +1,4 @@
+[package]
+name = "rt"
+version.workspace = true
+edition.workspace = true

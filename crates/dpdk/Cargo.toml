@@ -1,0 +1,8 @@
+[package]
+name = "dpdk"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+dpdk-sys = { path = "../dpdk-sys" }
+arrayvec = "0.7"

@@ -1,0 +1,4 @@
+[package]
+name = "wire"
+version.workspace = true
+edition.workspace = true

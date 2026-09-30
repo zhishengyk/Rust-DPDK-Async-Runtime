@@ -1,0 +1,9 @@
+[package]
+name = "dpdk-sys"
+version.workspace = true
+edition.workspace = true
+links = "dpdk"
+
+[build-dependencies]
+cc = "1"
+bindgen = "0.71"
