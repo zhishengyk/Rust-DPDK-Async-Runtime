@@ -79,6 +79,37 @@ timeout 测试中成功样本数为 0 时，输出的 process p99=0 表示空直
 `cargo test --workspace --locked`：11 个单元测试通过；`cargo clippy --workspace --all-targets -- -D warnings`、release 构建通过。统计测试覆盖逐请求相加而非相加分位数、1ns 桶/大值 max、尾批排空和样本计数。
 线程实际亲和性见 [thread-affinity.json](thread-affinity.json)。后台版额外消耗一个忙轮询 CPU 核，不能宣传为总资源不变或统计零开销。
 
+## 时间读数步进复核
+
+针对“为什么 process 输出多为 0 结尾”的复核：链接项目实际 `metrics::now`、`Clock::ns` 和 `Recorder`，诊断进程固定核 2，采集时不访问网卡、不换算、不入桶、不打印。频率沿用该机器 DPDK 实测的 2600000000Hz。
+
+| 读法/负载 | 时间差样本数 | 时间差 ticks 的最大公约数 | 非 26 倍数的时间差 |
+|---|---:|---:|---:|
+| raw_rdtsc | 1000000 | 1 | 319640 |
+| project_metrics_now | 1000000 | 26 | 0 |
+| project_now_varied_work | 1000000 | 26 | 0 |
+| legacy_asm_varied_work | 1000000 | 26 | 0 |
+
+当前有屏障的读法，无论连续空读还是穿插 0～63 次变化的整数运算，时间差都落在 26 ticks 的网格上：`26 × 10^9 / 2600000000 = 10ns`。旧版内联汇编读法也一样。因此本机这条有序计时路径实测呈 10ns 离散步进，不能把“1ns 桶”宣传为真实 1ns 测量分辨率。
+
+这不是把 TSC 的标称 2.6GHz 直接当成可观测的 0.385ns 分辨率。裸 RDTSC 的诊断确实出现 1/25 ticks 差值；它与有屏障的读法不同，本次证据不足以断言所有 TSC 读法或所有机器都只有 10ns 物理分辨率，也不能据此认定是某个 AWS 虚拟化机制造成的。此项是本机实测现象，不是硬件规格保证。
+
+另外，将人工构造的 701～709ns 样本送入实际 Clock 换算 → SPSC → HDR → 分位数 → JSON 链路，p99 依次原样输出 701～709ns。`Clock::ns` 仅向下取整到整数 ns，终端的 `{:10}` 表示字段宽度，JSON 直接序列化整数；没有按 10ns 舍入。未发现这条转换/统计/输出路径把个位清零的问题。
+
+旧报告的 713ns 也不证明旧版能分辨真实的 1ns 变化。举例：原始 1846 ticks（按 2.6GHz 为 710ns），旧版自写直方图所在桶的上界是 1855 ticks，再按旧 A 频率 2599982104Hz 换算，报告就会显示 713ns；这是桶上界近似造成的非整十尾数。新版在该范围内不再引入这项桶上界误差。不能把 713→710ns 直接解释成代码省了 3ns。
+
+原始数据见 [tsc-probe-core2.json](tsc-probe-core2.json)，诊断源码见 [tsc-probe.rs](tsc-probe.rs)。本次不改变生产代码、计时屏障或既有 A/B 性能结果。复现命令（在可构建的工作区、release 库已构建后）：
+
+```bash
+source /home/ec2-user/.cargo/env
+rustc --edition=2021 -O -C panic=abort results/metrics-offload/tsc-probe.rs \
+  -L dependency=target/release/deps \
+  --extern metrics=target/release/libmetrics.rlib \
+  --extern serde_json="$(ls target/release/deps/libserde_json-*.rlib | head -n 1)" \
+  -o target/metrics-bench/tsc-probe
+taskset -c 2 target/metrics-bench/tsc-probe
+```
+
 ## 未采用的初版
 
 曾用标准库 sync_channel 传整批事件，统计线程阻塞接收。A timer p99 为 2200/2570ns，对应同步版 1450/1420ns；未保留该实现，改为目前的 SPSC 环形队列。原始数据保存在 [channel/](channel/)，源码快照是 [channel.patch.gz](channel.patch.gz)，不参与最终编译。
