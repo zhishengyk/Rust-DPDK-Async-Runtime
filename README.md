@@ -144,6 +144,8 @@ ENA watchdog 的 `rte_timer_manage` 每毫秒调用一次；不另建后台上�
 
 ## 测量口径与报表
 
+测试数据、日志和报告保存在本地 `results/`，该目录已加入 `.gitignore`，不上传 GitHub。
+
 | 时刻 | A/B 共同语义 |
 |---|---|
 | T0 | 共用 `Shared::send` 入口，分配/patch/copy 之前 |
@@ -172,7 +174,7 @@ ENA watchdog 的 `rte_timer_manage` 每毫秒调用一次；不另建后台上�
 
 队列满时会产生背压，保证不丢统计样本；次数记入 `statistics.backpressure_batches`，
 不能把异步统计宣称为零开销或绝不阻塞。退出时提交不足一批的尾部、排空队列并 join 统计线程。
-实现与同精度同步统计的对照见 [统计线程测试报告](results/metrics-offload/REPORT.md)。
+实现与同精度同步统计的对照见 统计线程测试报告（本地 `results/metrics-offload/REPORT.md`）。
 
 默认超时是 **T1 后 10ms**。超时算 loss，不进入成功 RTT 直方图；
 以 `(session, seq, T0)` 记录每个超时，避免 16 位 seq 回绕误认旧包。
@@ -191,10 +193,10 @@ python3 scripts/compare.py results/a-600.json results/b-600.json
 ```
 
 这里只计算 **A 分位数减 B 分位数**，不是逐样本配对差分。
-优化前的结果见 [原始实测报告](results/REPORT.md)，本次配置调整及对照结果见
-[延迟优化报告](results/optimization/REPORT.md)；原始终端日志及完整 JSON 一并保留。
-后续 runtime 调度与 reply 槽优化见 [runtime 优化报告](results/runtime-optimization/REPORT.md)。
-进一步的队列、timer 引用和 future 类型试验见 [第二轮探索](results/runtime-round2/REPORT.md)；
+优化前的结果见 原始实测报告（本地 `results/REPORT.md`），本次配置调整及对照结果见
+延迟优化报告（本地 `results/optimization/REPORT.md`）；原始终端日志及完整 JSON 一并保留。
+后续 runtime 调度与 reply 槽优化见 runtime 优化报告（本地 `results/runtime-optimization/REPORT.md`）。
+进一步的队列、timer 引用和 future 类型试验见 第二轮探索（本地 `results/runtime-round2/REPORT.md`）；
 这些候选未显示稳定收益，未纳入实现。
 
 ## C 的可比性

@@ -1,5 +1,5 @@
 /target/
 /env.sh
 /build/
-/results/local/
+/results/
 __pycache__/

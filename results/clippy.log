@@ -1,3 +1,0 @@
-    Checking rt v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/crates/rt)
-    Checking async-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/async-ping)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
