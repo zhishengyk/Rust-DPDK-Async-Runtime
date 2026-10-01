@@ -1,0 +1,120 @@
+{
+  "accounted": true,
+  "client": "B",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_replied": 0,
+    "arp_tx_failed": 0,
+    "duplicate": 0,
+    "foreign": 0,
+    "late_reply": 0,
+    "rx": 23484,
+    "timeout": 0,
+    "tx": 23484,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 1.00002126,
+  "latency": {
+    "end_to_end": {
+      "count": 23484,
+      "max": 130740,
+      "p50": 42390,
+      "p90": 44100,
+      "p99": 45880,
+      "p999": 49950,
+      "p9999": 84220
+    },
+    "process": {
+      "count": 23484,
+      "max": 24980,
+      "p50": 220,
+      "p90": 280,
+      "p99": 720,
+      "p999": 940,
+      "p9999": 4700
+    },
+    "receive": {
+      "count": 23484,
+      "max": 4920,
+      "p50": 140,
+      "p90": 200,
+      "p99": 240,
+      "p999": 330,
+      "p9999": 1660
+    },
+    "send": {
+      "count": 23484,
+      "max": 24490,
+      "p50": 70,
+      "p90": 90,
+      "p99": 580,
+      "p999": 770,
+      "p9999": 2660
+    },
+    "sleep_error": {
+      "count": 23484,
+      "max": 50,
+      "p50": 40,
+      "p90": 40,
+      "p99": 40,
+      "p999": 40,
+      "p9999": 40
+    },
+    "timer": {
+      "count": 23483,
+      "max": 3660,
+      "p50": 80,
+      "p90": 80,
+      "p99": 90,
+      "p999": 1500,
+      "p9999": 2460
+    }
+  },
+  "losses": [],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "nic": {
+    "missed": 0,
+    "rx": 23484,
+    "rx_errors": 0,
+    "rx_nombuf": 0,
+    "tx": 23851,
+    "tx_errors": 0
+  },
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 0,
+    "duration_sec": 1,
+    "output": "/home/ec2-user/Rust-DPDK-Async-Runtime-metrics-offload/results/metrics-offload/check-b-min.json",
+    "payload": 8,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 1,
+    "src_ip": "10.202.15.210",
+    "stats_core": 3,
+    "timeout_us": 10000
+  },
+  "statistics": {
+    "backpressure_batches": 0,
+    "exact_ns_max": 262143,
+    "library": "hdrhistogram 7.6.0",
+    "mode": "background",
+    "significant_figures": 5,
+    "unit": "ns"
+  },
+  "tsc_frequency_source": "dpdk",
+  "tsc_hz": 2600000000,
+  "units": "ns"
+}

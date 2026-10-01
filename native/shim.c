@@ -1,20 +1,37 @@
 // 项目自己的 FFI 适配层：为 DPDK 头文件中的 inline API 导出可供 Rust 调用的符号。
 // 这里调用已安装的 DPDK；并不修改 DPDK 驱动或 Linux 内核源码。
+#define _GNU_SOURCE
 #include "shim.h"
 #include <rte_eal.h>
 #include <rte_errno.h>
 #include <rte_ethdev.h>
 #include <rte_mbuf.h>
 #include <rte_timer.h>
+#include <rte_cycles.h>
+#include <rte_lcore.h>
+#include <rte_thread.h>
+#include <stdatomic.h>
+#include <x86intrin.h>
 
 static inline uint64_t cycles(void) {
     // 与 Rust metrics::now 相同的有序 TSC 读取，避免计时点被前后指令穿越。
-    uint32_t lo, hi;
-    __asm__ volatile("lfence; rdtsc; lfence" : "=a"(lo), "=d"(hi) :: "memory");
-    return ((uint64_t)hi << 32) | lo;
+    atomic_signal_fence(memory_order_seq_cst);
+    _mm_lfence();
+    uint64_t t = __rdtsc();
+    _mm_lfence();
+    atomic_signal_fence(memory_order_seq_cst);
+    return t;
 }
 int w_eal_init(int argc, char **argv) { return rte_eal_init(argc, argv); }
 void w_eal_cleanup(void) { rte_eal_cleanup(); }
+uint64_t w_tsc_hz(void) { return rte_get_tsc_hz(); }
+int w_pin_thread(unsigned core) {
+    if (core >= CPU_SETSIZE) return -EINVAL;
+    rte_cpuset_t cpus;
+    CPU_ZERO(&cpus);
+    CPU_SET(core, &cpus);
+    return rte_thread_set_affinity(&cpus);
+}
 w_pool *w_pool_create(void) {
     // 4095 个 mbuf，单核缓存 128 个；常见分配/释放走本核缓存，减少共享池环访问。
     return (w_pool *)rte_pktmbuf_pool_create("ping_pool", 4095, 128, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());

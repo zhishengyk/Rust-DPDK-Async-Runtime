@@ -27,7 +27,8 @@ device-number 0 留给 SSH/C。脚本不会重启。
 本机配置：主网卡 `enp39s0 / 10.202.11.18`，DPDK 网卡
 `0000:28:00.0 / 10.202.15.210`；对端 `10.202.8.15 / 06:ff:fd:b6:f0:cd`。
 
-核 2 跑 A/B；0–1 跑 OS/C，3 备用。EAL 固定 runtime 到核 2，脚本迁走可移动 IRQ。
+核 2 跑 A/B；0–1 跑 OS/C，核 3 跑统计线程。executor、reactor、session 和 mbuf 仍全部在核 2。
+统计线程只接收延迟数值，不参与收发或 task 调度。EAL 固定 runtime 到核 2，脚本迁走可移动 IRQ。
 需要启动级隔离时执行 `./scripts/prepare-host.sh --isolate-on-reboot`，下次手动重启才生效。
 默认实测采用无需重启的 IRQ 亲和性方案，**不宣称已启用 isolcpus**。
 重启后先执行 `./scripts/prepare-host.sh` 恢复大页挂载和绑定。
@@ -44,10 +45,11 @@ sudo target/release/async-ping --bdf "$BDF" --src-ip "$SRC_IP" \
 
 两个客户端参数相同：必填 `--delay-us`、`--duration-sec`、`--src-ip`、`--bdf`；
 可选 `--sessions`（1–128，默认 64）、`--payload`（8–1472，默认 64）、
-`--timeout-us`（默认 10000）、`--core`（默认 2）、`--peer-ip`、`--peer-mac`、`--output`。
+`--timeout-us`（默认 10000）、`--core`（默认 2）、`--stats-core`（默认 3，须与 core 不同）、
+`--peer-ip`、`--peer-mac`、`--output`。
 脚本提供源 IP/BDF。持续时间从所有启动工作完成后开始计算；到期停止新请求，
 完成最后的 reply/timeout 和 sleep，再接收 50ms 迟到包，停止端口、清点 mbuf、输出统计。
-因此墙钟时间还包含 EAL 初始化、500ms TSC 校准和至多一次 timeout/sleep 的收尾。
+因此墙钟时间还包含 EAL/直方图初始化、至多一次 timeout/sleep 的收尾，以及统计队列排空和报表生成。
 
 ## 架构
 
@@ -63,7 +65,7 @@ src/
 ├── dpdk_sys.rs     C FFI 绑定入口
 ├── dpdk_build.rs   C shim 编译与绑定生成
 ├── wire.rs         ICMP/ARP 报文编解码
-└── metrics.rs      TSC 计时与直方图
+└── metrics.rs      官方 TSC 接口、统计队列与后台 HDR 直方图
 native/
 ├── shim.c          DPDK 调用与 T1/T2 打点
 └── shim.h          C ABI 声明
@@ -131,11 +133,12 @@ ARP 请求原地改为应答；不实现 ARP 缓存、路由、分片或 IPv4 op
 TX 失败立即释放，计入 `tx_failed`，下一次仍遵守 delay；不加无限重试或恢复框架。
 
 timer/task 槽不在一次运行内回收复用；固定启动任务已满足 demo。
-直方图、就绪队列、包批次固定容量；只有异常路径的逐包丢失记录可能增长。
+直方图、统计队列、就绪队列、包批次固定容量；只有异常路径的逐包丢失记录可能增长。
 协议和两个 bin 禁止 unsafe。unsafe 限于 FFI/mbuf 封装、Waker vtable、TSC 指令。
 
-TSC 使用 `LFENCE; RDTSC; LFENCE` 和编译器内存屏障，避免把几十纳秒的指标建立在
-未排序的指令上。C shim 与 Rust 使用同一序列；A/B 同样承担打点开销。
+TSC 使用 Rust 官方 `_mm_lfence()` / `_rdtsc()` 加 `compiler_fence()`；C shim 使用对应 intrinsic
+和 `atomic_signal_fence()`。两侧仍保留 `LFENCE; RDTSC; LFENCE` 序列，A/B 同样承担打点开销。
+EAL 初始化后通过 `rte_get_tsc_hz()` 取得频率，不再自行 sleep 500ms 校准。
 ENA watchdog 的 `rte_timer_manage` 每毫秒调用一次；不另建后台上报线程。
 `Runtime::run_with_maintenance` 在两轮任务 poll 后执行维护闭包；普通 `run` 不需要此闭包。
 
@@ -154,8 +157,20 @@ ENA watchdog 的 `rte_timer_manage` 每毫秒调用一次；不另建后台上�
 首发 stagger 不记 sleep 指标，最后一次 sleep 没有下一个 T0，因此 timer 样本略少。
 另外单独报 `send` / `receive`，方便定位开销。
 所有指标给出 p50/p90/p99/p99.9/p99.99/max/count，单位 ns。
-直方图保存原始 cycles，分位数取桶上界，误差小于约 1.6%；max 精确保存。
-报表阶段才换算 ns。TSC 频率通过 `Instant` 与 500ms 校准得到。
+运行线程在原来的 sleep 后记录位置，只追加 TSC 差值到本地 256 条缓冲；满批复制到 `rtrb` SPSC
+环形队列（容量 64 批），复用本地数组，不逐批分配或清零。
+统计线程默认绑定核 3，负责 ticks → ns 换算、入桶以及结束后的分位数计算；不传递 mbuf。
+统计线程在专用核上轮询，消耗额外一个 CPU 核，避免每批唤醒 OS 线程产生尖峰。
+这里使用普通 OS 线程，不引入第二个 async runtime。终端日志和 JSON 仍在停止测量后输出。
+
+直方图使用第三方 `hdrhistogram 7.6.0`，5 位有效数字，单位 ns。0～262143ns 每个整数单独一桶；
+更大值按 HDR 规则合并，max 单独精确保存（ns 转换向下取整）。启动时预分配覆盖 u64 范围的桶，
+禁止运行中自动扩容；不存在保存每个原始样本的大数组。process 在逐样本相加 ticks 后再换算 ns。
+新报告在 `statistics` 中注明库版本、精度、单位和收集方式，不再沿用旧版 1.6% 的误差标注。
+
+队列满时会产生背压，保证不丢统计样本；次数记入 `statistics.backpressure_batches`，
+不能把异步统计宣称为零开销或绝不阻塞。退出时提交不足一批的尾部、排空队列并 join 统计线程。
+实现与同精度同步统计的对照见 [统计线程测试报告](results/metrics-offload/REPORT.md)。
 
 默认超时是 **T1 后 10ms**。超时算 loss，不进入成功 RTT 直方图；
 以 `(session, seq, T0)` 记录每个超时，避免 16 位 seq 回绕误认旧包。
@@ -209,7 +224,7 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
-# 不依赖 DPDK 的时钟注入/runtime/协议/直方图测试
+# 不依赖 DPDK 的时钟注入/runtime/协议/统计线程测试
 cargo test -p rt -p wire -p metrics
 
 # 可选：不涉及 FFI 的严格 provenance 内存模型检查
@@ -221,14 +236,14 @@ rg -n 'tokio|async-std|smol|glommio|monoio|LocalPool|block_on' Cargo.lock src
 # 实测：无输出，退出码 1。
 ```
 
-测试涵盖增量 checksum、奇数 payload、截断帧/fragment、ARP、直方图、timer、
+测试涵盖增量 checksum、奇数 payload、截断帧/fragment、ARP、HDR 精度与极值、统计队列尾批排空、timer、
 reply/timeout、重复唤醒、跨线程唤醒、runtime 销毁后的 Waker。
 网卡和 10 分钟验证见实测报告。
 
 换 ENI：恢复旧卡，删除或修改 `env.sh` 的 BDF/SRC_IP/DPDK_IF，再运行 prepare-host。
 本机 MAC 自动读取；对端地址在 env.sh。换非 ENA 卡还要修改 setup.sh 的 `enable_drivers`；
 队列深度 512、单端口/单队列/offload=0 集中在 `native/shim.c::w_port_start`。
-大于 MTU 的 payload、不可信网络中的完整协议校验、多核、热插拔、故障重连均不在本项目范围。
+大于 MTU 的 payload、不可信网络中的完整协议校验、runtime 跨核调度、热插拔、故障重连均不在本项目范围。
 
 参考：[DPDK ENA 文档](https://doc.dpdk.org/guides-23.11/nics/ena.html)、
 [iputils interval 解析](https://github.com/iputils/iputils/blob/20210202/ping/ping.c)、

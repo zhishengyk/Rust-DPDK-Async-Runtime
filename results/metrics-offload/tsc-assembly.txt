@@ -1,0 +1,20 @@
+00000000000bc680 <core::ptr::drop_in_place<async_ping::session::{{closure}}>>:
+00000000000bcbc0 <async_ping::session::{{closure}}>:
+   bcef0:	0f ae e8             	lfence
+   bcef3:	0f 31                	rdtsc
+   bcef5:	0f ae e8             	lfence
+   bcef8:	48 8b 4b 50          	mov    0x50(%rbx),%rcx
+   bcf81:	0f ae e8             	lfence
+   bcf84:	0f 31                	rdtsc
+   bcf86:	0f ae e8             	lfence
+   bcf89:	49 8b b5 c0 20 00 00 	mov    0x20c0(%r13),%rsi
+000000000015bd70 <w_rx>:
+  15bda9:	0f ae e8             	lfence
+  15bdac:	0f 31                	rdtsc
+  15bdae:	0f ae e8             	lfence
+  15bdb1:	48 c1 e2 20          	shl    $0x20,%rdx
+000000000015bdf0 <w_tx>:
+  15be32:	0f ae e8             	lfence
+  15be35:	0f 31                	rdtsc
+  15be37:	0f ae e8             	lfence
+  15be3a:	48 c1 e2 20          	shl    $0x20,%rdx

@@ -1,0 +1,355 @@
+{
+  "accounted": true,
+  "client": "A",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_replied": 0,
+    "arp_tx_failed": 0,
+    "duplicate": 0,
+    "foreign": 0,
+    "late_reply": 39,
+    "rx": 2936018,
+    "timeout": 39,
+    "tx": 2936057,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 30.00064484,
+  "latency": {
+    "end_to_end": {
+      "count": 2936018,
+      "max": 1398530,
+      "p50": 157800,
+      "p90": 230050,
+      "p99": 235310,
+      "p999": 248610,
+      "p9999": 294291
+    },
+    "process": {
+      "count": 2936018,
+      "max": 1059640,
+      "p50": 240,
+      "p90": 470,
+      "p99": 720,
+      "p999": 870,
+      "p9999": 2030
+    },
+    "receive": {
+      "count": 2936018,
+      "max": 1059330,
+      "p50": 140,
+      "p90": 240,
+      "p99": 350,
+      "p999": 450,
+      "p9999": 1620
+    },
+    "send": {
+      "count": 2936018,
+      "max": 29720,
+      "p50": 80,
+      "p90": 300,
+      "p99": 550,
+      "p999": 680,
+      "p9999": 800
+    },
+    "sleep_error": {
+      "count": 2936057,
+      "max": 11807040,
+      "p50": 150,
+      "p90": 630,
+      "p99": 1150,
+      "p999": 2140,
+      "p9999": 25100
+    },
+    "timer": {
+      "count": 2935993,
+      "max": 11807200,
+      "p50": 200,
+      "p90": 680,
+      "p99": 1210,
+      "p999": 2210,
+      "p9999": 25150
+    }
+  },
+  "losses": [
+    {
+      "late": true,
+      "seq": 24393,
+      "session": 0,
+      "t0": 595957354196176
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 2,
+      "t0": 595957354207122
+    },
+    {
+      "late": true,
+      "seq": 24406,
+      "session": 4,
+      "t0": 595957354208136
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 6,
+      "t0": 595957354209852
+    },
+    {
+      "late": true,
+      "seq": 24389,
+      "session": 7,
+      "t0": 595957354211048
+    },
+    {
+      "late": true,
+      "seq": 24397,
+      "session": 8,
+      "t0": 595957354212582
+    },
+    {
+      "late": true,
+      "seq": 24389,
+      "session": 9,
+      "t0": 595957354213258
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 11,
+      "t0": 595957354214714
+    },
+    {
+      "late": true,
+      "seq": 24396,
+      "session": 12,
+      "t0": 595957354218042
+    },
+    {
+      "late": true,
+      "seq": 24396,
+      "session": 14,
+      "t0": 595957354218822
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 15,
+      "t0": 595957354219680
+    },
+    {
+      "late": true,
+      "seq": 24393,
+      "session": 16,
+      "t0": 595957354220928
+    },
+    {
+      "late": true,
+      "seq": 24395,
+      "session": 18,
+      "t0": 595957354221968
+    },
+    {
+      "late": true,
+      "seq": 24391,
+      "session": 19,
+      "t0": 595957354446036
+    },
+    {
+      "late": true,
+      "seq": 24407,
+      "session": 20,
+      "t0": 595957354447102
+    },
+    {
+      "late": true,
+      "seq": 24395,
+      "session": 22,
+      "t0": 595957354449104
+    },
+    {
+      "late": true,
+      "seq": 24387,
+      "session": 23,
+      "t0": 595957354449962
+    },
+    {
+      "late": true,
+      "seq": 24392,
+      "session": 25,
+      "t0": 595957354657156
+    },
+    {
+      "late": true,
+      "seq": 24406,
+      "session": 26,
+      "t0": 595957354657962
+    },
+    {
+      "late": true,
+      "seq": 24396,
+      "session": 27,
+      "t0": 595957354659158
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 30,
+      "t0": 595957354660614
+    },
+    {
+      "late": true,
+      "seq": 24396,
+      "session": 31,
+      "t0": 595957354661654
+    },
+    {
+      "late": true,
+      "seq": 24392,
+      "session": 32,
+      "t0": 595957354662850
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 34,
+      "t0": 595957354664462
+    },
+    {
+      "late": true,
+      "seq": 24405,
+      "session": 36,
+      "t0": 595957354665606
+    },
+    {
+      "late": true,
+      "seq": 24392,
+      "session": 38,
+      "t0": 595957354675486
+    },
+    {
+      "late": true,
+      "seq": 24389,
+      "session": 39,
+      "t0": 595957354676110
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 40,
+      "t0": 595957354677358
+    },
+    {
+      "late": true,
+      "seq": 24389,
+      "session": 41,
+      "t0": 595957354678372
+    },
+    {
+      "late": true,
+      "seq": 24407,
+      "session": 42,
+      "t0": 595957354678944
+    },
+    {
+      "late": true,
+      "seq": 24396,
+      "session": 44,
+      "t0": 595957355145826
+    },
+    {
+      "late": true,
+      "seq": 24392,
+      "session": 45,
+      "t0": 595957355146996
+    },
+    {
+      "late": true,
+      "seq": 24393,
+      "session": 46,
+      "t0": 595957355148088
+    },
+    {
+      "late": true,
+      "seq": 24395,
+      "session": 47,
+      "t0": 595957355150220
+    },
+    {
+      "late": true,
+      "seq": 24394,
+      "session": 48,
+      "t0": 595957355151442
+    },
+    {
+      "late": true,
+      "seq": 24395,
+      "session": 49,
+      "t0": 595957355160412
+    },
+    {
+      "late": true,
+      "seq": 24395,
+      "session": 50,
+      "t0": 595957355161556
+    },
+    {
+      "late": true,
+      "seq": 24392,
+      "session": 51,
+      "t0": 595957355162414
+    },
+    {
+      "late": true,
+      "seq": 24406,
+      "session": 52,
+      "t0": 595957355163662
+    }
+  ],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "nic": {
+    "missed": 0,
+    "rx": 2936057,
+    "rx_errors": 0,
+    "rx_nombuf": 0,
+    "tx": 2936424,
+    "tx_errors": 0
+  },
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 500,
+    "duration_sec": 30,
+    "output": "results/metrics-offload/background-a-2.json",
+    "payload": 64,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 64,
+    "src_ip": "10.202.15.210",
+    "stats_core": 3,
+    "timeout_us": 10000
+  },
+  "statistics": {
+    "backpressure_batches": 0,
+    "exact_ns_max": 262143,
+    "library": "hdrhistogram 7.6.0",
+    "mode": "background",
+    "significant_figures": 5,
+    "unit": "ns"
+  },
+  "tsc_frequency_source": "dpdk",
+  "tsc_hz": 2600000000,
+  "units": "ns"
+}

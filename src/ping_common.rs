@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 use clap::Parser;
 use dpdk::{Mbuf, Port};
-use metrics::{now, Clock, Histograms};
+use metrics::{now, Clock, Recorder};
 use serde::Serialize;
 use std::net::Ipv4Addr;
 use wire::{Network, Packet, TxTemplate};
@@ -31,6 +31,8 @@ pub struct Options {
     pub bdf: String,
     #[arg(long, default_value_t = 2)]
     pub core: usize,
+    #[arg(long, default_value_t = 3)]
+    pub stats_core: u32,
     #[arg(long, default_value = "report.json")]
     pub output: String,
 }
@@ -91,7 +93,7 @@ pub struct Shared {
     // 每个 session 当前唯一的在途请求；seq + t0 一起匹配，防止 seq 回绕后接纳旧包。
     pub expected: Vec<Option<Stamp>>,
     pub counters: Counters,
-    pub hist: Histograms,
+    pub metrics: Recorder,
     pub losses: Vec<Loss>,
     pub start: u64,
     pub end: u64,
@@ -103,7 +105,12 @@ impl Shared {
     pub fn open() -> Result<Self, String> {
         let options = Options::parse();
         let port = Port::open(&options.bdf, options.core)?;
-        let clock = Clock::calibrate();
+        let clock = Clock { hz: port.tsc_hz() };
+        if options.stats_core as usize == options.core {
+            return Err("stats-core must differ from core".into());
+        }
+        let stats_core = options.stats_core;
+        let metrics = Recorder::new(clock, move || dpdk::pin_thread(stats_core));
         let net = Network {
             mac: port.mac,
             ip: options.src_ip.octets(),
@@ -129,7 +136,7 @@ impl Shared {
             templates,
             expected,
             counters: Counters::default(),
-            hist: Histograms::default(),
+            metrics,
             losses: Vec::new(),
             start: 0,
             end,
@@ -175,7 +182,7 @@ impl Shared {
         self.counters.tx += 1;
         if let Some(deadline) = sleep_deadline {
             // 段③：上次 sleep 到期 → 下一次 T0，包含恢复后统计/释放等工作，单独报告。
-            self.hist.timer.record(t0 - deadline);
+            self.metrics.timer(t0 - deadline);
         }
         Some(stamp)
     }
@@ -240,7 +247,7 @@ impl Shared {
         });
     }
     pub fn record(&mut self, sample: Sample) {
-        self.hist
+        self.metrics
             .reply(sample.stamp.t0, sample.stamp.t1, sample.reply.t2, sample.t3);
         drop(sample.reply.mbuf);
     }
@@ -268,13 +275,18 @@ impl Shared {
         // 停止/关闭端口后，RX 描述符和未回收的 TX mbuf 才会归还内存池。
         let (initial, final_count) = self.port.finish();
         let missing = self.losses.iter().filter(|l| !l.late).count();
-        let latency = self.hist.summaries(self.clock);
+        // 停止收发后排空统计队列并等候最终分位数；写日志/JSON 不进入测量窗口。
+        let (latency, backpressure_batches) = self.metrics.finish();
         // 每个成功提交的 request 必须落在成功或超时之一；迟到是超时的补充分类。
         let accounted = self.counters.tx == self.counters.rx + self.counters.timeout;
         let report = serde_json::json!({
             "client": label, "options": self.options, "tsc_hz": self.clock.hz,
             "elapsed_sec": (measured_end-self.start) as f64 / self.clock.hz as f64,
-            "units": "ns", "histogram_relative_error_max": 0.015625,
+            "units": "ns", "tsc_frequency_source": "dpdk",
+            "statistics": { "library": "hdrhistogram 7.6.0", "unit": "ns",
+                "significant_figures": metrics::SIGNIFICANT_FIGURES,
+                "exact_ns_max": metrics::EXACT_NS_MAX, "mode": metrics::COLLECTION_MODE,
+                "backpressure_batches": backpressure_batches },
             "latency": latency, "counters": self.counters, "losses": self.losses,
             "missing": missing, "accounted": accounted,
             "mempool": {"initial": initial, "final": final_count, "leak_free": initial == final_count},

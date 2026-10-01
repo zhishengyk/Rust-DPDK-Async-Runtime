@@ -1,0 +1,120 @@
+{
+  "accounted": true,
+  "client": "A",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_replied": 1,
+    "arp_tx_failed": 0,
+    "duplicate": 0,
+    "foreign": 1,
+    "late_reply": 0,
+    "rx": 2997875,
+    "timeout": 0,
+    "tx": 2997875,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 30.00056696,
+  "latency": {
+    "end_to_end": {
+      "count": 2997875,
+      "max": 305320,
+      "p50": 158300,
+      "p90": 162480,
+      "p99": 169830,
+      "p999": 245720,
+      "p9999": 253530
+    },
+    "process": {
+      "count": 2997875,
+      "max": 31700,
+      "p50": 250,
+      "p90": 480,
+      "p99": 730,
+      "p999": 880,
+      "p9999": 1900
+    },
+    "receive": {
+      "count": 2997875,
+      "max": 31300,
+      "p50": 140,
+      "p90": 250,
+      "p99": 350,
+      "p999": 450,
+      "p9999": 990
+    },
+    "send": {
+      "count": 2997875,
+      "max": 25330,
+      "p50": 80,
+      "p90": 310,
+      "p99": 560,
+      "p999": 690,
+      "p9999": 840
+    },
+    "sleep_error": {
+      "count": 2997875,
+      "max": 38050,
+      "p50": 150,
+      "p90": 650,
+      "p99": 1600,
+      "p999": 3370,
+      "p9999": 6970
+    },
+    "timer": {
+      "count": 2997811,
+      "max": 38100,
+      "p50": 200,
+      "p90": 750,
+      "p99": 2200,
+      "p999": 3470,
+      "p9999": 7090
+    }
+  },
+  "losses": [],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "nic": {
+    "missed": 0,
+    "rx": 2997877,
+    "rx_errors": 0,
+    "rx_nombuf": 0,
+    "tx": 2998243,
+    "tx_errors": 0
+  },
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 500,
+    "duration_sec": 30,
+    "output": "results/metrics-offload/background-a-1.json",
+    "payload": 64,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 64,
+    "src_ip": "10.202.15.210",
+    "stats_core": 3,
+    "timeout_us": 10000
+  },
+  "statistics": {
+    "backpressure_batches": 0,
+    "exact_ns_max": 262143,
+    "library": "hdrhistogram 7.6.0",
+    "mode": "background",
+    "significant_figures": 5,
+    "unit": "ns"
+  },
+  "tsc_frequency_source": "dpdk",
+  "tsc_hz": 2600000000,
+  "units": "ns"
+}

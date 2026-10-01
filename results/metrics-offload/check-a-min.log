@@ -1,0 +1,15 @@
+EAL: No free 1048576 kB hugepages reported on node 0
+ena_get_metrics_entries(): 0x6 customer metrics are supported
+TELEMETRY: No legacy callbacks, legacy socket not created
+ena_rx_queue_release(): Rx queue 0:0 released
+ena_tx_queue_release(): Tx queue 0:0 released
+client=A sessions=1 duration=1s delay=0us payload=8 timeout=10000us
+metric(ns)         p50        p90        p99      p99.9     p99.99        max      samples
+end_to_end          42410      44630      70280      71750      81670     303610        22688
+process               230        290        710        920       2790      25280        22688
+receive               150        210        250        330        420       1100        22688
+send                   80         90        560        760       2540      24180        22688
+sleep_error            40         40         40         40         40        110        22688
+timer                  80         90         90       1480       2870       3420        22687
+tx=22688 rx=22688 timeout=0 late=0 missing=0 tx_failed=0 alloc_failed=0 accounted=true
+mempool: 4095 -> 4095; report=/home/ec2-user/Rust-DPDK-Async-Runtime-metrics-offload/results/metrics-offload/check-a-min.json

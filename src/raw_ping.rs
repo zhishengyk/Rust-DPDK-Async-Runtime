@@ -73,7 +73,7 @@ fn run() -> Result<(), String> {
                         }
                         State::Sleeping { sample, measured } => {
                             if measured {
-                                io.hist.sleep_error.record(now() - s.deadline);
+                                io.metrics.sleep_error(now() - s.deadline);
                             }
                             if let Some(sample) = sample {
                                 io.record(sample);

@@ -4,6 +4,8 @@ typedef struct w_pool w_pool;
 typedef struct w_mbuf w_mbuf;
 int w_eal_init(int argc, char **argv);
 void w_eal_cleanup(void);
+uint64_t w_tsc_hz(void);
+int w_pin_thread(unsigned core);
 w_pool *w_pool_create(void);
 void w_pool_free(w_pool *pool);
 unsigned w_pool_avail(w_pool *pool);

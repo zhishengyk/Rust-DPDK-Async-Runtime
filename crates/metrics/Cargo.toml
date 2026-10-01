@@ -7,5 +7,7 @@ edition.workspace = true
 path = "../../src/metrics.rs"
 
 [dependencies]
+hdrhistogram = { version = "=7.6.0", default-features = false }
+rtrb = "=0.4.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

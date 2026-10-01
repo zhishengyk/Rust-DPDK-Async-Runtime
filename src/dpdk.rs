@@ -9,6 +9,15 @@ use std::{
 };
 pub const BURST: usize = 32;
 
+/// 统计线程单独绑定 CPU；不注册为 DPDK lcore，不访问 mbuf 或收发队列。
+pub fn pin_thread(core: u32) {
+    assert_eq!(
+        unsafe { w_pin_thread(core) },
+        0,
+        "cannot pin statistics thread"
+    );
+}
+
 fn error() -> String {
     // SAFETY: w_error 返回 DPDK 管理的 NUL 结尾字符串，这里立即复制为 Rust String。
     unsafe { CStr::from_ptr(w_error()).to_string_lossy().into_owned() }
@@ -73,6 +82,10 @@ pub struct Port {
     active: bool,
 }
 impl Port {
+    /// Port 创建成功意味着 EAL 已初始化，DPDK 已确定本机 TSC 频率。
+    pub fn tsc_hz(&self) -> u64 {
+        unsafe { w_tsc_hz() }
+    }
     pub fn open(bdf: &str, core: usize) -> Result<Self, String> {
         // EAL 是进程级状态，只初始化一次；这项约束是安全封装前提，不在逐包路径上。
         static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

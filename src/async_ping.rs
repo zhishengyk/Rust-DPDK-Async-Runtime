@@ -45,7 +45,7 @@ async fn session(
         let resumed = now();
         {
             let mut io = io.borrow_mut();
-            io.hist.sleep_error.record(resumed - deadline);
+            io.metrics.sleep_error(resumed - deadline);
             // 四个打点已保存，统计与 mbuf 释放延后到 sleep 后，不进入本次 T0 → T3。
             if let Some(sample) = sample {
                 io.record(sample);

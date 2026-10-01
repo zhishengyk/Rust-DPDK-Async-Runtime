@@ -1,0 +1,15 @@
+EAL: No free 1048576 kB hugepages reported on node 0
+ena_get_metrics_entries(): 0x6 customer metrics are supported
+TELEMETRY: No legacy callbacks, legacy socket not created
+ena_rx_queue_release(): Rx queue 0:0 released
+ena_tx_queue_release(): Tx queue 0:0 released
+client=A sessions=64 duration=5s delay=500us payload=64 timeout=10000us
+metric(ns)         p50        p90        p99      p99.9     p99.99        max      samples
+end_to_end         107230     173980     247040     253370     305841     318860       516890
+process               240        470        710        880       2040      29210       516890
+receive               140        240        350        460       1420      29140       516890
+send                   80        300        530        670        900      24800       516890
+sleep_error           150        630       1630       3540      10740      31140       516890
+timer                 190        690       2190       3620      10820      31190       516826
+tx=516890 rx=516890 timeout=0 late=0 missing=0 tx_failed=0 alloc_failed=0 accounted=true
+mempool: 4095 -> 4095; report=results/metrics-offload/smoke-a.json

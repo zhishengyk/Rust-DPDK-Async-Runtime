@@ -1,0 +1,98 @@
+   Compiling metrics v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime-metrics-offload/crates/metrics)
+   Compiling ping-common v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime-metrics-offload/crates/ping-common)
+   Compiling raw-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime-metrics-offload/bins/raw-ping)
+   Compiling async-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime-metrics-offload/bins/async-ping)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+     Running unittests ../../src/async_ping.rs (target/debug/deps/async_ping-5c7c38ccfce4d178)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../../src/dpdk.rs (target/debug/deps/dpdk-8ec1d5604282de7c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../../src/dpdk_sys.rs (target/debug/deps/dpdk_sys-6a3305186a4834a3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../../src/metrics.rs (target/debug/deps/metrics-d549456805e2c83a)
+
+running 2 tests
+test tests::nanosecond_bins_and_extreme_values ... ok
+test tests::process_keeps_per_request_pairing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running unittests ../../src/ping_common.rs (target/debug/deps/ping_common-7a9baa86d28392bd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../../src/raw_ping.rs (target/debug/deps/raw_ping-8cdec6e7b61e989f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../../src/rt.rs (target/debug/deps/rt-799a7f99189237df)
+
+running 6 tests
+test tests::foreign_wake_reaches_home_thread ... ok
+test tests::dedup_self_wake_and_stale_identity ... ok
+test tests::full_slot_preserves_first_value_and_same_turn_delivery ... ok
+test tests::reply_runs_before_clock_check_and_maintenance ... ok
+test tests::self_wakes_do_not_starve_reactor_timers_or_maintenance ... ok
+test tests::timers_reply_timeout_and_cancel ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../../src/wire.rs (target/debug/deps/wire-e58d6a359bca51e2)
+
+running 2 tests
+test tests::parse_truncation_fragments_and_arp ... ok
+test tests::incremental_matches_full_checksum ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests dpdk
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests dpdk_sys
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests metrics
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ping_common
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests rt
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wire
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

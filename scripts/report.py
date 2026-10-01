@@ -34,7 +34,10 @@ for name, r in [('A', a), ('B', b)]:
     for metric in ['process', 'end_to_end', 'timer', 'sleep_error', 'send', 'receive']:
         h = r['latency'][metric]
         lines.append(f'| {name}/{metric} | ' + ' | '.join(str(h[q]) for q in quantiles) + f" | {h['count']} |")
-lines += ['', '直方图分位数取桶上界，误差约 ≤1.6%；max 是精确的原始 cycle 最大值换算。',
+histogram_note = ('HDR 直方图按 ns 记录，0～262143ns 为 1ns 桶，更大值按 HDR 规则合并；max 单独保存。'
+                  if a.get('statistics', {}).get('library', '').startswith('hdrhistogram') else
+                  '直方图分位数取桶上界，误差约 ≤1.6%；max 是精确的原始 cycle 最大值换算。')
+lines += ['', histogram_note,
           '差值来自两次顺序运行，包含批次大小、系统调度、虚拟化和驱动回收时机的变化，',
           '不能把所有尾部差值都归因于 Waker。receive 指标体现主要 async 交接/调度成本。', '',
           '## A/C 同负载端到端参照', '',
