@@ -6,6 +6,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent / 'results/runtime-optimization'
 quantiles = ['p50', 'p90', 'p99', 'p999', 'p9999', 'max']
 
+# 读取本地 runtime 优化实验中指定名称的 JSON 测量记录。
 def read(name):
     return json.loads((root / f'{name}.json').read_text())
 

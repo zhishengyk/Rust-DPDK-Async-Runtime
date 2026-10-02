@@ -18,6 +18,7 @@ with open(source) as log:
         if match:
             transmitted, received = map(int, match.groups())
 count = sum(hist.values())
+# 按样本计数求最近秩分位数，p 取 0～1；返回已换算为 ns 的系统 ping RTT。
 def percentile(p):
     target = math.ceil(count * p)
     total = 0

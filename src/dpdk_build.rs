@@ -1,5 +1,6 @@
 // 构建项目的 C shim、生成小范围 Rust 绑定，并把静态 DPDK 链接参数传给两个客户端。
 use std::{env, path::PathBuf, process::Command};
+/// 调用 pkg-config 获取已安装 DPDK 的静态编译或链接参数；缺少配置时终止构建。
 fn pkg(arg: &str) -> String {
     let output = Command::new("pkg-config")
         .args(["--static", arg, "libdpdk"])
@@ -11,6 +12,7 @@ fn pkg(arg: &str) -> String {
     );
     String::from_utf8(output.stdout).unwrap()
 }
+/// 构建脚本入口：编译 C shim、从 shim.h 生成 w_* 绑定，并传递 DPDK 静态链接参数。
 fn main() {
     // Cargo 在 dpdk-sys 的清单目录运行此脚本；源码集中在根目录的 src/ 和 native/ 下。
     println!("cargo:rerun-if-changed=../../native/shim.c");

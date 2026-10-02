@@ -5,15 +5,22 @@
 // ICMP identifier = BASE_ID + session，回包时可直接映射到会话槽。
 pub const BASE_ID: u16 = 0x4000;
 #[derive(Clone, Copy)]
+/// 固定链路两端的二层/三层地址，用于发送模板和接收过滤。
 pub struct Network {
+    /// 本机 DPDK 端口的 6 字节 MAC。
     pub mac: [u8; 6],
+    /// 本机 IPv4 地址的 4 个网络顺序字节。
     pub ip: [u8; 4],
+    /// 固定对端 MAC，直接作为请求帧的目的地址。
     pub peer_mac: [u8; 6],
+    /// 固定对端 IPv4，用于请求目的地址和回包源地址过滤。
     pub peer_ip: [u8; 4],
 }
+/// 按网络字节序读取偏移 at 处的 16 位字段；调用者先保证两个字节都在切片内。
 fn word(p: &[u8], at: usize) -> u16 {
     u16::from_be_bytes([p[at], p[at + 1]])
 }
+/// 按网络字节序累加 16 位字，奇数长度的最后一个字节低位补零；暂不折叠进位。
 fn sum(bytes: &[u8]) -> u32 {
     // Internet checksum 按网络字节序累加 16 位字；奇数字节数时末尾补零。
     bytes
@@ -21,22 +28,28 @@ fn sum(bytes: &[u8]) -> u32 {
         .map(|p| ((p[0] as u32) << 8) | p.get(1).copied().unwrap_or(0) as u32)
         .sum()
 }
+/// 反复折叠 checksum 累加值的高 16 位进位，再按位取反得到最终校验和。
 fn finish(mut s: u32) -> u16 {
     while s >> 16 != 0 {
         s = (s & 0xffff) + (s >> 16);
     }
     !(s as u16)
 }
+/// 计算完整字节序列的 Internet checksum，供启动模板构造和校验测试使用。
 pub fn checksum(bytes: &[u8]) -> u16 {
     finish(sum(bytes))
 }
 
 /// 每个 session 一份可复用字节模板；它是普通 Vec，不持有 DPDK mbuf。
 pub struct TxTemplate {
+    /// 预分配的完整报文字节，含各层头和 payload；逐包只改变化字段。
     frame: Vec<u8>,
+    /// ICMP 固定字节的未折叠 checksum 累加和，不包含变化的 seq/T0。
     base: u32,
 }
 impl TxTemplate {
+    /// 在启动时创建指定 session 的完整帧模板，固定 MAC/IP/id/padding 并缓存 ICMP 常量和。
+    /// payload 包含保存 T0 的 8 字节；IP checksum 只在此处计算一次。
     pub fn new(net: Network, session: usize, payload: usize) -> Self {
         assert!((8..=1472).contains(&payload));
         // 帧布局：Ethernet 14B + IPv4 20B + ICMP 8B + payload；payload 前 8B 存 T0。
@@ -71,11 +84,24 @@ impl TxTemplate {
 }
 
 #[derive(Debug, PartialEq)]
+/// 报文分类结果；只保存解析出的身份字段，不持有或复制 mbuf。
 pub enum Packet {
-    Reply { session: usize, seq: u16, t0: u64 },
+    /// 格式和地址符合要求的 Echo Reply，仍须与当前请求核对。
+    Reply {
+        /// ICMP identifier 减 BASE_ID 后得到的会话索引。
+        session: usize,
+        /// ICMP sequence，按网络字节序读取。
+        seq: u16,
+        /// payload 前 8 字节中的原始 T0，按本协议约定的小端还原。
+        t0: u64,
+    },
+    /// 请求查询本机 IPv4 对应 MAC 的 ARP request，需要原地生成应答。
     Arp,
+    /// 无关、长度不足或本实验不支持的报文，交给上层计数并释放。
     Other,
 }
+/// 只解析本实验支持的 ARP request 或固定 IPv4/ICMP Echo Reply；其他帧返回 Other。
+/// 返回的 session/seq/T0 只是报文身份，在途请求匹配和截止时间检查由 Shared::dispatch 完成。
 pub fn classify(p: &[u8], net: Network, sessions: usize) -> Packet {
     // 先验证长度再按固定偏移读取；这些检查保证切片访问安全，也排除无关帧。
     if p.len() < 42 {
@@ -134,6 +160,7 @@ pub fn arp_reply(p: &mut [u8], net: Network) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// 生成测试专用的固定本机/对端地址，不访问真实网卡。
     fn net() -> Network {
         Network {
             mac: [1; 6],
@@ -143,6 +170,7 @@ mod tests {
         }
     }
     #[test]
+    /// 验证不同 payload 长度、序号和 T0 下，模板增量计算与完整 checksum 校验一致。
     fn incremental_matches_full_checksum() {
         for payload in [8, 63, 64, 1472] {
             let mut tpl = TxTemplate::new(net(), 63, payload);
@@ -156,6 +184,7 @@ mod tests {
         }
     }
     #[test]
+    /// 验证正常回复身份解析、截断/分片拒绝，以及 ARP 应答地址与操作码的改写。
     fn parse_truncation_fragments_and_arp() {
         let n = net();
         let mut tpl = TxTemplate::new(n, 2, 64);

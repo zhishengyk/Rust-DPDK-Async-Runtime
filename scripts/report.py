@@ -6,6 +6,7 @@ import sys
 from datetime import datetime, timezone
 
 root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'results')
+# 从指定结果目录读取一份命名 JSON，供 A/B/C 对账与延迟报告生成使用。
 def read(name):
     return json.loads((root / f'{name}.json').read_text())
 a, b, low, c = map(read, ['a-600', 'b-600', 'a-lowload', 'c'])

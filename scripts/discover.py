@@ -7,6 +7,7 @@ import urllib.request
 base = 'http://169.254.169.254/latest/'
 req = urllib.request.Request(base + 'api/token', method='PUT', headers={'X-aws-ec2-metadata-token-ttl-seconds': '60'})
 token = urllib.request.urlopen(req, timeout=3).read().decode()
+# 使用启动时取得的 IMDSv2 token 读取指定元数据路径，返回去除首尾空白的文本。
 def get(path):
     req = urllib.request.Request(base + 'meta-data/' + path, headers={'X-aws-ec2-metadata-token': token})
     return urllib.request.urlopen(req, timeout=3).read().decode().strip()
