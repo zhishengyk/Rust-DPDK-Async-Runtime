@@ -102,6 +102,11 @@ impl Port {
     pub fn tsc_hz(&self) -> u64 {
         unsafe { w_tsc_hz() }
     }
+    /// The installed PMD/device advertise RX hardware timestamp offload.
+    /// This does not imply a per-packet DMA completion timestamp is available.
+    pub fn rx_timestamp_supported(&self) -> bool {
+        unsafe { w_rx_timestamp_supported() != 0 }
+    }
     /// 只初始化一次 EAL，绑定收发核和指定 PCI 网卡，创建池并启动单端口单队列。
     /// 配置 RX 描述符前保存可用 mbuf 基线，供结束时检查泄漏。
     pub fn open(bdf: &str, core: usize) -> Result<Self, String> {

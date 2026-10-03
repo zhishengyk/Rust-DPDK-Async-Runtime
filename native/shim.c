@@ -29,6 +29,11 @@ int w_eal_init(int argc, char **argv) { return rte_eal_init(argc, argv); }
 void w_eal_cleanup(void) { rte_eal_cleanup(); }
 // 取得 EAL 初始化时确定的 TSC 每秒计数，供 Rust 进行 ticks 与时间单位换算。
 uint64_t w_tsc_hz(void) { return rte_get_tsc_hz(); }
+int w_rx_timestamp_supported(void) {
+    struct rte_eth_dev_info info;
+    if (rte_eth_dev_info_get(0, &info) != 0) return 0;
+    return (info.rx_offload_capa & RTE_ETH_RX_OFFLOAD_TIMESTAMP) != 0;
+}
 // 将调用线程绑定到指定 Linux CPU；返回 0 表示成功，非零表示绑核失败。
 int w_pin_thread(unsigned core) {
     if (core >= CPU_SETSIZE) return -EINVAL;

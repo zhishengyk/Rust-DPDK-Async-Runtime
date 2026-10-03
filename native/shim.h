@@ -10,6 +10,8 @@ int w_eal_init(int argc, char **argv);
 void w_eal_cleanup(void);
 // 取得 EAL 初始化时确定的 TSC 每秒计数，供 Rust 进行 ticks 与时间单位换算。
 uint64_t w_tsc_hz(void);
+// Advertised per-packet RX hardware timestamp capability; not a DMA completion timestamp.
+int w_rx_timestamp_supported(void);
 // 将调用线程绑定到指定 Linux CPU；返回 0 表示成功，非零表示绑核失败。
 int w_pin_thread(unsigned core);
 // 创建 4095 个报文缓冲的池，配置 128 个对象的本核缓存；失败时返回 NULL。

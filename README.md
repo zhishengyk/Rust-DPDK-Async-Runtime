@@ -1,7 +1,11 @@
 # Rust DPDK Async Runtime
 
 单核 poll-mode Rust runtime，以及共用收发代码的 ICMP 客户端 A (`async-ping`) / B (`raw-ping`)。
-C 使用系统 `ping`。没有现成 executor、reactor 或网络栈。
+C 使用系统 `ping`。原有 ICMP 实现没有现成 executor、reactor 或网络栈。
+
+新增 [`binance-ws`](docs/BINANCE_WS.md)：DPDK ENA → smoltcp TCP → rustls TLS → WebSocket → BTCUSDT 永续行情解析，
+再通过现有 runtime 交给应用任务。分别测量 RX 取包后的处理耗时、可观察队列就绪时间区间和应用交付耗时；
+不把软件 RX 时间戳称为精确 DMA 完成时间。构建和运行见上述文档。
 
 ## 快速运行
 
