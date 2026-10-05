@@ -38,7 +38,5 @@ uint16_t w_rx(w_mbuf **out, uint16_t count, uint64_t *t2);
 uint16_t w_tx(w_mbuf *m, uint64_t *t1);
 // 运行 DPDK timer 管理函数，服务 ENA watchdog 等驱动维护任务。
 void w_maintenance(void);
-// 向调用者的至少 6 项数组写入 RX、TX、missed、RX error、TX error、RX no-mbuf 计数。
-void w_stats(uint64_t *values);
 // 取得当前 rte_errno 对应的 DPDK 错误字符串；调用者只读取，不释放该指针。
 const char *w_error(void);

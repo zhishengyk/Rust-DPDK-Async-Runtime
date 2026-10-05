@@ -92,8 +92,9 @@ fn run() -> Result<(), String> {
                                 live -= 1;
                                 s.deadline = u64::MAX;
                             } else {
+                                let t0 = now(); // T0：已判定该 session 应当发送。
                                 if let Some(stamp) =
-                                    io.send(sid, s.seq, measured.then_some(s.deadline))
+                                    io.send(sid, s.seq, measured.then_some(s.deadline), t0)
                                 {
                                     s.state = State::Waiting(stamp);
                                     s.deadline = stamp.deadline;

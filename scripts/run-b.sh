@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec "$(dirname "$0")/run.sh" raw-ping "$@"
+exec "$(dirname "$0")/run-client.sh" raw-ping "$@"

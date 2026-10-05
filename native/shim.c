@@ -99,12 +99,5 @@ uint16_t w_tx(w_mbuf *m, uint64_t *t1) {
 // 服务驱动注册的 DPDK timer（包括 ENA watchdog），由上层约每 1ms 调用。
 // 运行 DPDK timer 管理函数，服务 ENA watchdog 等驱动维护任务。
 void w_maintenance(void) { rte_timer_manage(); }
-// 向调用者的至少 6 项数组写入 RX、TX、missed、RX error、TX error、RX no-mbuf 计数。
-void w_stats(uint64_t *v) {
-    struct rte_eth_stats s = {0};
-    rte_eth_stats_get(0, &s);
-    v[0] = s.ipackets; v[1] = s.opackets; v[2] = s.imissed;
-    v[3] = s.ierrors; v[4] = s.oerrors; v[5] = s.rx_nombuf;
-}
 // 取得当前 rte_errno 对应的 DPDK 错误字符串；调用者只读取，不释放该指针。
 const char *w_error(void) { return rte_strerror(rte_errno); }

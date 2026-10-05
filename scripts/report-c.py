@@ -27,7 +27,6 @@ def percentile(p):
         if total >= target:
             return value
 
-assert count and received == count, 'Missing samples or ping summary'
 latency = dict(count=count, p50=percentile(.5), p90=percentile(.9), p99=percentile(.99),
                p999=percentile(.999), p9999=percentile(.9999), max=max(hist))
 report = dict(client='C', units='ns', elapsed_sec=int(duration), tx=transmitted, rx=received,

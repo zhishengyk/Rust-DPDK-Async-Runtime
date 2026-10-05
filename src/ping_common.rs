@@ -1,5 +1,5 @@
 //! A/B 共用的会话 I/O、请求匹配和统计；差异留在 async 调度与手写状态机中。
-//! T0 在 send 入口，T1/T2 在 C shim 的 TX/RX 返回处，T3 由各客户端在收到 reply 时记录。
+//! T0 由客户端在决定发送时记录，T1/T2 在 C shim 的 TX/RX 返回处，T3 在回复交付时记录。
 #![forbid(unsafe_code)]
 use clap::Parser;
 use dpdk::{Mbuf, Port};
@@ -69,12 +69,6 @@ pub struct Counters {
     pub timeout: u64,
     /// 截止时间后收到并成功匹配的请求回复数，每个请求只计一次。
     pub late_reply: u64,
-    /// 重复或无法与当前/未补记丢失请求匹配的 Echo Reply 数。
-    pub duplicate: u64,
-    /// 协议分类为 Other 的帧数，包括不支持的格式和无关报文。
-    pub foreign: u64,
-    /// 复用收到的 ARP request 成功提交应答的数量。
-    pub arp_replied: u64,
     /// ARP 应答未被 TX 驱动接纳的数量。
     pub arp_tx_failed: u64,
     /// ICMP request 已取得 mbuf，但 TX 驱动未接纳的次数。
@@ -87,7 +81,7 @@ pub struct Counters {
 pub struct Stamp {
     /// 本次请求的 ICMP sequence，与回包字段比较。
     pub seq: u16,
-    /// 共用 send 入口记录的绝对 TSC，同时写入 payload 作为请求身份。
+    /// 客户端发送入口记录的绝对 TSC，同时写入 payload 作为请求身份。
     pub t0: u64,
     /// TX burst 返回后记录的绝对 TSC。
     pub t1: u64,
@@ -215,8 +209,13 @@ impl Shared {
     }
     /// A/B 使用同一发送路径；T1−T0 包含模板更新、mbuf 分配、复制与 TX 提交的耗时。
     #[inline]
-    pub fn send(&mut self, sid: usize, seq: u16, sleep_deadline: Option<u64>) -> Option<Stamp> {
-        let t0 = now(); // T0：本次决定发送；失败的提交不生成 reply 延迟样本。
+    pub fn send(
+        &mut self,
+        sid: usize,
+        seq: u16,
+        sleep_deadline: Option<u64>,
+        t0: u64,
+    ) -> Option<Stamp> {
         let frame = self.templates[sid].emit(seq, t0);
         let Some(mut packet) = self.port.alloc(frame.len()) else {
             self.counters.alloc_failed += 1;
@@ -251,13 +250,11 @@ impl Shared {
             Packet::Arp => {
                 // DPDK 接管的端口没有内核代答 ARP，复用收到的缓冲区原地生成应答。
                 wire::arp_reply(mbuf.data_mut(), self.net);
-                if self.port.send(mbuf).is_ok() {
-                    self.counters.arp_replied += 1;
-                } else {
+                if self.port.send(mbuf).is_err() {
                     self.counters.arp_tx_failed += 1;
                 }
             }
-            Packet::Other => self.counters.foreign += 1,
+            Packet::Other => {}
             Packet::Reply { session, seq, t0 } => {
                 if let Some(s) = self.expected[session].as_mut() {
                     if s.seq == seq && s.t0 == t0 {
@@ -268,8 +265,6 @@ impl Shared {
                         if !s.late_seen {
                             s.late_seen = true;
                             self.counters.late_reply += 1;
-                        } else {
-                            self.counters.duplicate += 1;
                         }
                         return None;
                     }
@@ -283,8 +278,6 @@ impl Shared {
                 {
                     loss.late = true;
                     self.counters.late_reply += 1;
-                } else {
-                    self.counters.duplicate += 1;
                 }
             }
         }
@@ -337,26 +330,20 @@ impl Shared {
             }
             self.maintenance();
         }
-        let nic = self.port.stats();
         // 停止/关闭端口后，RX 描述符和未回收的 TX mbuf 才会归还内存池。
         let (initial, final_count) = self.port.finish();
         let missing = self.losses.iter().filter(|l| !l.late).count();
         // 停止收发后排空统计队列并等候最终分位数；写日志/JSON 不进入测量窗口。
-        let (latency, backpressure_batches) = self.metrics.finish();
+        let latency = self.metrics.finish();
         // 每个成功提交的 request 必须落在成功或超时之一；迟到是超时的补充分类。
         let accounted = self.counters.tx == self.counters.rx + self.counters.timeout;
         let report = serde_json::json!({
-            "client": label, "options": self.options, "tsc_hz": self.clock.hz,
+            "client": label, "options": self.options,
             "elapsed_sec": (measured_end-self.start) as f64 / self.clock.hz as f64,
-            "units": "ns", "tsc_frequency_source": "dpdk",
-            "statistics": { "library": "hdrhistogram 7.6.0", "unit": "ns",
-                "significant_figures": metrics::SIGNIFICANT_FIGURES,
-                "exact_ns_max": metrics::EXACT_NS_MAX, "mode": metrics::COLLECTION_MODE,
-                "backpressure_batches": backpressure_batches },
+            "units": "ns",
             "latency": latency, "counters": self.counters, "losses": self.losses,
             "missing": missing, "accounted": accounted,
-            "mempool": {"initial": initial, "final": final_count, "leak_free": initial == final_count},
-            "nic": {"rx": nic[0], "tx": nic[1], "missed": nic[2], "rx_errors": nic[3], "tx_errors": nic[4], "rx_nombuf": nic[5]}
+            "mempool": {"initial": initial, "final": final_count, "leak_free": initial == final_count}
         });
         println!(
             "client={label} sessions={} duration={}s delay={}us payload={} timeout={}us",

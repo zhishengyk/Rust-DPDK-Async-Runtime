@@ -1,81 +1,77 @@
 #!/usr/bin/env python3
-"""Turn the retained JSON measurements into the repository's latency report."""
+"""Summarize one A/B or A/C run."""
 import json
-import pathlib
 import sys
-from datetime import datetime, timezone
+from pathlib import Path
 
-root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'results')
-# 从指定结果目录读取一份命名 JSON，供 A/B/C 对账与延迟报告生成使用。
+mode, directory = sys.argv[1:]
+root = Path(directory)
+quantiles = ('p50', 'p90', 'p99', 'p999', 'p9999', 'max')
+
 def read(name):
     return json.loads((root / f'{name}.json').read_text())
-a, b, low, c = map(read, ['a-600', 'b-600', 'a-lowload', 'c'])
-quantiles = ['p50', 'p90', 'p99', 'p999', 'p9999', 'max']
-date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-lines = ['# 实机延迟报告', '', f'报告生成日期：{date} UTC。所有延迟单位为 **ns**。', '',
-         '环境：AWS c8a.xlarge，AMD EPYC 9R45，4 物理核；Amazon Linux 2023；',
-         'Rust 1.90.0 / DPDK 23.11.5 / ENA / vfio-pci noiommu / 2MB hugepages。',
-         'runtime 固定核 2，已迁移可移动 IRQ；本次未重启启用 isolcpus。',
-         '完整环境和二进制 SHA256 见 [environment.txt](environment.txt)。', '',
-         '## 10 分钟主测试', '',
-         'A/B 顺序运行，各 `--delay-us 500 --duration-sec 600 --sessions 64 --payload 64`。',
-         '超时 10ms；两者共用帧模板、checksum、解析、T0/T1/T2 和直方图实现。', '',
-         '| 客户端 | 实测秒数 | TX | RX | timeout | late | missing | mbuf 初/末 |',
-         '|---|---:|---:|---:|---:|---:|---:|---|']
-for name, r in [('A', a), ('B', b)]:
-    counts, pool = r['counters'], r['mempool']
-    lines.append(f"| {name} | {r['elapsed_sec']:.6f} | {counts['tx']} | {counts['rx']} | {counts['timeout']} | {counts['late_reply']} | {r['missing']} | {pool['initial']}/{pool['final']} |")
-lines += ['', '主排名：A−B **进程内耗时分位数之差**（非逐样本配对差分）：', '',
-          '| p50 | p90 | p99 | p99.9 | p99.99 | max |', '|---:|---:|---:|---:|---:|---:|',
-          '| ' + ' | '.join(str(a['latency']['process'][q] - b['latency']['process'][q]) for q in quantiles) + ' |', '',
-          '所有指标如下；process 为发送和接收两段之和，sleep 不在该指标或端到端 RTT 中。', '',
-          '| 客户端/指标 | p50 | p90 | p99 | p99.9 | p99.99 | max | 样本数 |',
-          '|---|---:|---:|---:|---:|---:|---:|---:|']
-for name, r in [('A', a), ('B', b)]:
-    for metric in ['process', 'end_to_end', 'timer', 'sleep_error', 'send', 'receive']:
-        h = r['latency'][metric]
-        lines.append(f'| {name}/{metric} | ' + ' | '.join(str(h[q]) for q in quantiles) + f" | {h['count']} |")
-histogram_note = ('HDR 直方图按 ns 记录，0～262143ns 为 1ns 桶，更大值按 HDR 规则合并；max 单独保存。'
-                  if a.get('statistics', {}).get('library', '').startswith('hdrhistogram') else
-                  '直方图分位数取桶上界，误差约 ≤1.6%；max 是精确的原始 cycle 最大值换算。')
-lines += ['', histogram_note,
-          '差值来自两次顺序运行，包含批次大小、系统调度、虚拟化和驱动回收时机的变化，',
-          '不能把所有尾部差值都归因于 Waker。receive 指标体现主要 async 交接/调度成本。', '',
-          '## A/C 同负载端到端参照', '',
-          'A：64 session、delay 64000us、60s；C：系统 ping -U、单流、1ms 间隔、60s。',
-          '两者 payload 64B、同一对端；使用各自指定 ENI。', '',
-          '| 客户端 | 接收 pps | p50 | p90 | p99 | p99.9 | p99.99 | max | 样本数 |',
-          '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
-for name, r, rate in [('A/低负载', low, low['counters']['rx']/low['elapsed_sec']), ('C', c, c['packets_per_sec'])]:
-    h = r['latency']['end_to_end']
-    lines.append(f'| {name} | {rate:.2f} | ' + ' | '.join(str(h[q]) for q in quantiles) + f" | {h['count']} |")
-lines += ['', 'A−C 端到端差：' + '，'.join(f"{q} = {low['latency']['end_to_end'][q] - c['latency']['end_to_end'][q]}ns" for q in ['p50', 'p99']) + '。',
-          '正数表示这一条件下 A 更慢，负数表示 A 更快。该结果不参与 A/B 主排名。',
-          'iputils 把亚毫秒 `-i` 截为零，故没有采用设计稿的 0.0005；C 的文本 RTT 有微秒级舍入。',
-          '`-U` 在用户态 recvmsg 后打点；默认内核 SO_TIMESTAMP 不包含用户态接收部分。',
-          '负载仅近似匹配，仍存在两张 ENI、内核与用户态调度、相位以及发送策略的差异。', '',
-          '## 可复核产物', '',
-          '- [A 600s JSON](a-600.json) / [日志](a-600.log)',
-          '- [B 600s JSON](b-600.json) / [日志](b-600.log)',
-          '- [A 60s 演练](a-60.json) / [B 60s 演练](b-60.json)',
-          '- [A 低负载](a-lowload.json) / [C 报表](c.json) / [C 原始日志](c.log.gz)',
-          '- [单元测试](tests.log) / [Clippy](clippy.log) / [Miri](miri.log)', '',
-          '每份 JSON 保留完整 counters、NIC stats、逐个超时的 session/seq/T0/late、mbuf 对账。',
-          'timeout 在报表中算 loss；late 只表示在最终 drain 结束前已观测到，missing 不虚构原因。', '']
-if low['latency']['end_to_end']['p50'] >= c['latency']['end_to_end']['p50']:
-    lines += ['本次低负载对照未观察到 kernel bypass 的端到端 p50 收益；主排名仍是上面的 A−B 进程内差值。', '']
-if (root / 'c-kernel-timestamp.json').exists():
-    lines += ['另保留 [默认内核时间戳的 C](c-kernel-timestamp.json) / [原始日志](c-kernel-timestamp.log.gz)，',
-              '用于复核计时口径差异；该轮不参与最终 A/C 差值。', '']
-if (root / 'a-timeout.json').exists():
-    lines += ['## 边界与超时验证', '',
-              '分别对 A/B 跑 1 秒：单 session、1µs timeout、63B 奇数 payload；',
-              '单 session、delay=0、8B 最小 payload；128 session、1472B 最大 payload。', '',
-              '| 测试 | TX | RX | timeout | late | missing | mbuf 初/末 |',
-              '|---|---:|---:|---:|---:|---:|---|']
-    for name in ['a-timeout', 'b-timeout', 'a-minimum', 'b-minimum', 'a-maximum', 'b-maximum']:
-        r = read(name)
-        counts, pool = r['counters'], r['mempool']
-        lines.append(f"| [{name}]({name}.json) | {counts['tx']} | {counts['rx']} | {counts['timeout']} | {counts['late_reply']} | {r['missing']} | {pool['initial']}/{pool['final']} |")
-    lines += ['', '强制超时用来验证 late 对账，不混入正常主测试的统计。', '']
-(root / 'REPORT.md').write_text('\n'.join(lines))
+
+def table(headers, rows):
+    return ['| ' + ' | '.join(map(str, row)) + ' |'
+            for row in [headers, ['---'] * len(headers), *rows]]
+
+names = ('a-600', 'b-600') if mode == 'ab' else ('a', 'c')
+runs = [(name, read(name)) for name in names]
+lines = [f'# {"A/B" if mode == "ab" else "A/C"} 测量汇总', '',
+         ('64 session、64B payload、收到回复后等待 500µs；A/B 各 600 秒。'
+          if mode == 'ab' else '单会话、64B payload、同一对端、客户端均在核 2，各 60 秒；A delay 950µs，C 间隔 1ms。'),
+         '', '## 收发与完整性', '']
+rows = []
+for name, d in runs:
+    c = d.get('counters', d)
+    pool = d.get('mempool')
+    rows.append([name, f"{d['elapsed_sec']:.3f}", c['tx'], c['rx'],
+                 f"{c['tx'] / d['elapsed_sec']:.2f}", c.get('timeout', c.get('loss', 0)),
+                 c.get('late_reply', '—'), d.get('missing', '—'),
+                 f"{pool['initial']}/{pool['final']}" if pool else '—'])
+    if pool:
+        lines.append(f"{name}：TX 提交失败 {c['tx_failed']}，分配失败 {c['alloc_failed']}，ARP 提交失败 {c['arp_tx_failed']}。")
+        if c["timeout"]:
+            lines.append(f"{name}：{c['timeout']} 次请求超过设定超时，按超时丢包计数；其中 {c['late_reply']} 个回复随后匹配到原请求。每个请求身份和迟到状态见 losses；这些记录不能单独确定延迟发生在本机、网络还是对端。")
+lines += ['', *table(['运行', '秒', 'TX', 'RX', 'TX/秒', '超时/丢包', '迟到', '未收到', 'mbuf 初/末'], rows)]
+labels = {'t1_t0': 'T1−T0', 't3_t2': 'T3−T2', 'process': '(T1−T0)+(T3−T2)',
+          'timer': 'T0′−T4', 'sleep_error': 'T5−T4', 'end_to_end': 'T3−T0'}
+metrics = ('t1_t0', 't3_t2', 'process', 'timer', 'sleep_error') if mode == 'ab' else ('end_to_end',)
+lines += ['', '## 延迟（ns）', '']
+rows = [[f'{name}/{labels[metric]}', *[d['latency'][metric][q] for q in quantiles],
+         d['latency'][metric]['count']] for name, d in runs for metric in metrics]
+lines += table(['指标', 'p50', 'p90', 'p99', 'p99.9', 'p99.99', 'max', '样本数'], rows)
+if mode == 'ab':
+    a, b = (d for _, d in runs[-2:])
+    delta = {q: a['latency']['process'][q] - b['latency']['process'][q] for q in ('p50', 'p99')}
+    lines += ['', f"A−B 的 (T1−T0)+(T3−T2)：p50 **{delta['p50']}ns**，p99 **{delta['p99']}ns**。",
+              '先对每个请求计算两段之和，再统计分位数；不能把两段的分位数直接相加。A−B 是独立运行的分位数之差。']
+else:
+    a, c = (d for _, d in runs)
+    rate_a, rate_c = a['counters']['tx'] / a['elapsed_sec'], c['tx'] / c['elapsed_sec']
+    gap = abs(rate_a / rate_c - 1) if rate_c else float('inf')
+    lines += ['', f'实际发包速率差异：{gap:.3%}。']
+    if gap <= .01:
+        delta = {q: c['latency']['end_to_end'][q] - a['latency']['end_to_end'][q] for q in ('p50', 'p99')}
+        lines += [f"C−A 的 T3−T0：p50 **{delta['p50']}ns**，p99 **{delta['p99']}ns**；正数表示 A 更低。"]
+    else:
+        lines += ['速率差异超过 1%，本轮负载未匹配，需重新校准 A 的 delay，不计算收益。']
+    lines += ['结论仅适用于此单会话负载；两张 ENI、发送策略及计时边界不同，不能外推到 64 session。']
+lines += ['', '## 时间戳说明', '',
+          'T0：A 进入发送接口、B 判定本次应发送；T1：tx_burst 返回；',
+          'T2：rx_burst 返回，同一批报文共用；T3：回复交给对应 session。']
+if mode == 'ab':
+    lines += ['T4：收到回复后等待的到期时刻；T5：等待结束、会话恢复执行的时刻；T0′：下一次请求的 T0。',
+              'T1−T0 为发送处理时间，T3−T2 为接收交付时间；T0′−T4 为到期至下次发送的延迟，T5−T4 为恢复执行的超期量。',
+              '60 秒演示和 T3−T0 不列入本汇总，原始日志及 JSON 保留完整测量。']
+else:
+    lines += ['T3−T0 为一次请求至回复交付的往返时间，不含两次请求间的等待。',
+              'C 的 T3−T0 来自 ping -U 的用户态往返时间；C 没有 A 的内部 T1、T2 打点。']
+lines += ['超时请求不进入成功请求的延迟分布；请求身份和迟到状态见对应 JSON 的 losses。']
+if any(d.get('missing', d.get('loss', 0)) for _, d in runs):
+    lines += ['存在未收到的回复，须解释每个丢包，当前结果不能直接认定通过完整性门槛。']
+if any('mempool' in d and (not d['mempool']['leak_free'] or not d['accounted']) for _, d in runs):
+    lines += ['mbuf 或收发对账失败，未通过完整性门槛。']
+output = root / 'SUMMARY.md'
+output.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+print(output)

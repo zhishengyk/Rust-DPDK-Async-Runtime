@@ -45,11 +45,7 @@ impl Clock {
 }
 
 /// HDR 的有效数字位数，用于配置分桶相对精度。
-pub const SIGNIFICANT_FIGURES: u8 = 5;
-/// 当前 HDR 配置保持每个整数独立一桶的最大 ns 值；不代表硬件测量精度。
-pub const EXACT_NS_MAX: u64 = 262_143;
-/// 写入报告的统计模式标识，区分本实现与同步统计对照。
-pub const COLLECTION_MODE: &str = "background";
+const SIGNIFICANT_FIGURES: u8 = 5;
 /// 一次提交到 SPSC 的最大事件数；事件数不等于报文数。
 const BATCH_SIZE: usize = 256;
 /// SPSC 可容纳的满批数量，总容量为 BATCH_SIZE × QUEUE_BATCHES 条事件。
@@ -94,7 +90,7 @@ impl Distribution {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 /// 一个指标的最终统计摘要；所有延迟字段单位为 ns，count 为样本数。
 pub struct Summary {
-    /// 进入这项分布的样本总数；超时请求不进入成功回复的四项分布。
+    /// 进入这项分布的样本总数；超时请求不进入 process 和 end_to_end 分布。
     pub count: u64,
     /// 第 50 百分位，即中位数，单位 ns。
     pub p50: u64,
@@ -128,15 +124,15 @@ enum Event {
     SleepError(u64),
 }
 
-/// 后台线程独占的六组指标分布，将前台事件转换成纳秒后记录。
+/// 后台线程独占四组任务指标及发送、接收两段分布。
 struct Histograms {
     /// 与前台相同的 TSC 频率，用于把所有差值统一换算为 ns。
     clock: Clock,
-    /// 六项分布，依次是 process、end_to_end、timer、sleep_error、send、receive。
+    /// process、end_to_end、timer、sleep_error、T1−T0、T3−T2。
     values: [Distribution; 6],
 }
 impl Histograms {
-    /// 为后台统计线程创建六组直方图，共用一份 TSC 频率配置。
+    /// 为后台统计线程创建直方图，共用一份 TSC 频率配置。
     fn new(clock: Clock) -> Self {
         Self {
             clock,
@@ -168,8 +164,8 @@ impl Histograms {
             "end_to_end",
             "timer",
             "sleep_error",
-            "send",
-            "receive",
+            "t1_t0",
+            "t3_t2",
         ]
         .into_iter()
         .zip(&self.values)
@@ -196,7 +192,7 @@ impl Batch {
 }
 
 /// 单核收发线程只追加数值；每 256 条交给统计线程，不跨线程传 mbuf。
-/// 有界队列满时背压并计数，不能静默丢样本。正常运行应检查 backpressure_batches=0。
+/// 有界队列满时等待空间，不能静默丢样本。
 pub struct Recorder {
     /// 当前收发线程独占的待发布事件缓冲。
     batch: Batch,
@@ -204,8 +200,6 @@ pub struct Recorder {
     sender: Producer<Event>,
     /// 后台统计线程的句柄；finish 通过 join 取回完整摘要。
     worker: JoinHandle<BTreeMap<&'static str, Summary>>,
-    /// 发布时首次发现队列空间不足的批次数，不是等待循环次数。
-    backpressure_batches: u64,
 }
 impl Recorder {
     /// 创建 SPSC 队列和统计线程，在线程中执行 worker_init（生产环境用于绑核）。
@@ -239,7 +233,6 @@ impl Recorder {
             batch: Batch::new(),
             sender,
             worker,
-            backpressure_batches: 0,
         }
     }
     /// 向收发线程本地缓冲追加一条事件；凑满 BATCH_SIZE 条时同步调用 flush 发布。
@@ -251,7 +244,7 @@ impl Recorder {
         }
     }
     /// 把有效事件一次性复制并发布到 SPSC，随后复用本地数组；不足一批也可以提交。
-    /// 队列满时计一次背压并等待空间，保证统计完整，不静默丢样本。
+    /// 队列满时等待空间，保证统计完整，不静默丢样本。
     fn flush(&mut self) {
         if self.batch.len == 0 {
             return;
@@ -259,7 +252,6 @@ impl Recorder {
         let events = &self.batch.events[..self.batch.len];
         // 一次复制、一批发布；复用本地数组，不逐批清零，不唤醒休眠的 OS 线程。
         if self.sender.push_entire_slice(events).is_err() {
-            self.backpressure_batches += 1;
             loop {
                 assert!(!self.sender.is_abandoned(), "statistics thread stopped");
                 if self.sender.push_entire_slice(events).is_ok() {
@@ -286,12 +278,11 @@ impl Recorder {
     pub fn sleep_error(&mut self, ticks: u64) {
         self.record(Event::SleepError(ticks));
     }
-    /// 提交尾批并关闭生产者，等待后台排空后返回所有摘要和背压批次数。
-    pub fn finish(mut self) -> (BTreeMap<&'static str, Summary>, u64) {
+    /// 提交尾批并关闭生产者，等待后台排空后返回摘要。
+    pub fn finish(mut self) -> BTreeMap<&'static str, Summary> {
         self.flush(); // 最后一批不足 256 条也必须提交。
         drop(self.sender); // receiver 排空后退出，再汇总；没有后台线程悬挂。
-        let summaries = self.worker.join().expect("statistics thread panicked");
-        (summaries, self.backpressure_batches)
+        self.worker.join().expect("statistics thread panicked")
     }
 }
 
@@ -311,18 +302,22 @@ mod tests {
                 recorder.timer(i as u64);
             }
         }
-        let (r, _) = recorder.finish();
-        for metric in ["send", "receive", "process", "end_to_end", "sleep_error"] {
+        let r = recorder.finish();
+        assert_eq!(r.len(), 6);
+        for metric in ["process", "end_to_end", "sleep_error", "t1_t0", "t3_t2"] {
             assert_eq!(r[metric].count, n as u64);
         }
         assert_eq!(r["timer"].count, n.div_ceil(2) as u64);
         assert_eq!(r["process"].p99, 20);
+        assert_eq!(r["t1_t0"].p99, 7);
+        assert_eq!(r["t3_t2"].p99, 13);
         assert_eq!(r["sleep_error"].max, n as u64 - 1);
     }
 
     #[test]
     /// 验证低延迟范围内的 1ns 桶、禁用自动扩容，以及极大数值的独立 max。
     fn nanosecond_bins_and_extreme_values() {
+        const EXACT_NS_MAX: u64 = 262_143;
         let mut d = Distribution::new();
         assert!(!d.histogram.is_auto_resize());
         for ns in [0, 1, 80, 242, 713, EXACT_NS_MAX] {
@@ -356,7 +351,8 @@ mod tests {
         });
         let r = h.summaries();
         assert_eq!(r["process"].p99, 100);
-        assert_eq!(r["send"].p99 + r["receive"].p99, 180);
+        assert_eq!(r["t1_t0"].p99, 90);
+        assert_eq!(r["t3_t2"].p99, 90);
         assert_eq!(r["end_to_end"].max, 300);
         assert_eq!(r["timer"].count, 0);
         assert_eq!(r["timer"].p99, 0);

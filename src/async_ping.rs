@@ -5,10 +5,11 @@ use ping_common::{Reply, Sample, Shared, Stamp};
 use std::{cell::RefCell, rc::Rc};
 
 /// 发送接口：借用共用 I/O 并同步提交一包，当前首次 poll 就完成。
-/// T0 位于内部 Shared::send，取得 RefCell 可变借用的操作在 T0 之前。
+/// T0 位于本发送入口，包含后续 RefCell 借用及共用收发代码。
 async fn send(io: &RefCell<Shared>, sid: usize, seq: u16, deadline: Option<u64>) -> Option<Stamp> {
     // 发送当前是同步完成的 async 接口；首次 poll 即完成，不额外制造一次调度。
-    io.borrow_mut().send(sid, seq, deadline)
+    let t0 = now(); // T0：发送入口，先打点再取得共享 I/O。
+    io.borrow_mut().send(sid, seq, deadline, t0)
 }
 /// 运行一个 session 的请求循环；sid 选择模板与请求槽，handle 管理该 task 的等待。
 /// 收到 reply 时立即保存 T3，持有 mbuf 跨越 sleep，恢复后才提交统计并释放报文。
@@ -79,9 +80,8 @@ fn run() -> Result<(), String> {
             let (batch, t2) = io.port.receive();
             for packet in batch {
                 if let Some((sid, reply)) = io.dispatch(packet, t2) {
-                    if slots[sid].deliver(reply).is_err() {
-                        io.counters.duplicate += 1;
-                    }
+                    // 槽已有回复时丢弃并释放重复包，保留第一份回复。
+                    let _ = slots[sid].deliver(reply);
                 }
             }
         },

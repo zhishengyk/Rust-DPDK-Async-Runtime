@@ -20,11 +20,15 @@ if test -d "/sys/bus/pci/devices/$BDF/net/$DPDK_IF"; then
   echo "$BDF" | sudo tee "/sys/bus/pci/devices/$BDF/driver/unbind" >/dev/null
   echo "$BDF" | sudo tee /sys/bus/pci/drivers_probe >/dev/null
 fi
-# Live fallback: runtime pinned by EAL; move movable IRQs off cores 2/3.
-if systemctl is-active --quiet irqbalance; then sudo systemctl stop irqbalance; fi
+# Keep movable IRQs and unbound workqueues on housekeeping cores.
+sudo systemctl disable --now irqbalance
+echo 3 | sudo tee /proc/irq/default_smp_affinity >/dev/null
+echo 3 | sudo tee /sys/devices/virtual/workqueue/cpumask >/dev/null
 sudo bash -c 'for irq in /proc/irq/*/smp_affinity_list; do echo 0-1 > "$irq" 2>/dev/null || :; done'
 if test "${1:-}" = --isolate-on-reboot; then
-  sudo grubby --update-kernel=ALL --args='isolcpus=2,3 nohz_full=2 rcu_nocbs=2 irqaffinity=0,1'
+  sudo mkdir -p /etc/systemd/system.conf.d
+  printf '[Manager]\nCPUAffinity=0 1\n' | sudo tee /etc/systemd/system.conf.d/80-dpdk-ping.conf >/dev/null
+  sudo grubby --update-kernel=ALL --args='isolcpus=domain,managed_irq,2-3 nohz_full=2-3 rcu_nocbs=2-3 irqaffinity=0-1'
   echo 'Boot isolation configured; it takes effect after your next reboot.'
 fi
 echo "DPDK: $BDF $SRC_IP; kernel: $KERNEL_IF; runtime core: $CORE"

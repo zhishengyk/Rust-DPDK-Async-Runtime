@@ -1,0 +1,3 @@
+[env]
+# scripts/setup.sh 的 DPDK 安装路径，供构建脚本和 rust-analyzer 查找 libdpdk。
+PKG_CONFIG_PATH = "/opt/dpdk/lib64/pkgconfig"

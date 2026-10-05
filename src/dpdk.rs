@@ -194,14 +194,6 @@ impl Port {
             w_maintenance();
         }
     }
-    /// 读取端口累计计数，顺序为 RX、TX、missed、RX error、TX error、RX no-mbuf。
-    pub fn stats(&self) -> [u64; 6] {
-        let mut v = [0; 6];
-        unsafe {
-            w_stats(v.as_mut_ptr());
-        }
-        v
-    }
     /// 消费端口所有者并先停止/关闭端口，返回池的初始和最终可用数量用于对账。
     pub fn finish(mut self) -> (u32, u32) {
         // 先停端口归还描述符里的 mbuf，再取池计数；调用者也应先释放其余 Mbuf。
