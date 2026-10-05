@@ -1,0 +1,50 @@
+测量日期：2026-10-06（北京时间）
+代码提交：d6f45bea5dcd7b256f48c20e6e0c887783eaedb0
+收发核 2；统计核 3；系统默认核 0–1。A/C 的 C 保留 Adaptive RX=on、rx-usecs=20。
+以下原始时间为 UTC。
+
+Mon Oct  5 17:13:50 UTC 2026
+BOOT_IMAGE=(hd0,gpt1)/boot/vmlinuz-6.18.48-107.148.amzn2023.x86_64 root=UUID=53e8e4c5-7263-4b35-8691-edf05a740452 ro console=tty0 console=ttyS0,115200n8 nvme_core.io_timeout=4294967295 rd.emergency=poweroff rd.shell=0 selinux=1 security=selinux quiet isolcpus=domain,managed_irq,2-3 nohz_full=2-3 rcu_nocbs=2-3 irqaffinity=0-1
+2-3
+2-3
+disabled
+Coalesce parameters for enp39s0:
+Adaptive RX: on  TX: n/a
+stats-block-usecs: n/a
+sample-interval: n/a
+pkt-rate-low: n/a
+pkt-rate-high: n/a
+
+rx-usecs: 20
+rx-frames: n/a
+rx-usecs-irq: n/a
+rx-frames-irq: n/a
+
+tx-usecs: 64
+tx-frames: n/a
+tx-usecs-irq: n/a
+tx-frames-irq: n/a
+
+rx-usecs-low: n/a
+rx-frame-low: n/a
+tx-usecs-low: n/a
+tx-frame-low: n/a
+
+rx-usecs-high: n/a
+rx-frame-high: n/a
+tx-usecs-high: n/a
+tx-frame-high: n/a
+
+CQE mode RX: n/a  TX: n/a
+
+138ab6eb0d90825a19095b55a74ad33b430bc095ccb6ccbea6176e651c78a2f7  target/release/async-ping
+b48882d8244c4d04a0d61da57770dc4904490bb4ab6c50952d20456699cb360f  target/release/raw-ping
+
+一键入口运行记录：
+Running a: 60 seconds
+Running a: 600 seconds
+Running b: 600 seconds
+results/ab-20261005T171350Z/SUMMARY.md
+Running A: 60 seconds
+Running C: 60 seconds
+results/ac-20261005T173452Z/SUMMARY.md
