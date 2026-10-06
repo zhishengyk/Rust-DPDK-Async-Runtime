@@ -1,0 +1,3 @@
+file=results/full-trace-20261006/check/timeout.ticks hz=2600000000 records=7979 invalid=0 delta_gcd_ticks=26
+kind1=0 kind2=1995 kind3=1994 kind4=1995 kind5=1995 kind6=0 kind7=0 
+t1_t0_max_ns=0 t3_t2_max_ns=0 process_max_ns=0 end_to_end_max_ns=0 timer_max_ns=1360 sleep_error_max_ns=1320 

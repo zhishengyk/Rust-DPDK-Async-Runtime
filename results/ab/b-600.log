@@ -5,11 +5,11 @@ ena_rx_queue_release(): Rx queue 0:0 released
 ena_tx_queue_release(): Tx queue 0:0 released
 client=B sessions=64 duration=600s delay=500us payload=64 timeout=10000us
 metric(ns)         p50        p90        p99      p99.9     p99.99        max      samples
-end_to_end         160160     164580     232140     241430     252160     462360     58127127
-process               200        420        700        840       1010      40130     58127127
-sleep_error            90        580       1260       1820       4410     117040     58127127
-t1_t0                  80        300        570        700        820      35640     58127127
-t3_t2                 120        180        270        360        500      40060     58127127
-timer                 130        620       1300       1870       4460     117080     58127063
-tx=58127127 rx=58127127 timeout=0 late=0 missing=0 tx_failed=0 alloc_failed=0 accounted=true
-mempool: 4095 -> 4095; report=results/ab-20261005T171350Z/b-600.json
+end_to_end         160110     163330     230120     241930     252590     413480     58273801
+process               200        410        660        790        950      41110     58273801
+sleep_error            90        570       1220       1780       4430     112520     58273801
+t1_t0                  80        290        530        650        750      33890     58273801
+t3_t2                 120        180        270        350        500      41040     58273801
+timer                 130        620       1270       1830       4480     112560     58273737
+tx=58273801 rx=58273801 timeout=0 late=0 missing=0 tx_failed=0 alloc_failed=0 accounted=true
+mempool: 4095 -> 4095; report=results/ab-20261006T010514Z/b-600.json

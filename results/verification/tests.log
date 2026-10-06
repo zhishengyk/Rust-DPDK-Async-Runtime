@@ -2,7 +2,7 @@
    Compiling ping-common v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/crates/ping-common)
    Compiling async-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/async-ping)
    Compiling raw-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/raw-ping)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.07s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
      Running unittests ../../src/async_ping.rs (target/debug/deps/async_ping-2703e59a9955b800)
 
 running 0 tests
@@ -28,7 +28,7 @@ test tests::nanosecond_bins_and_extreme_values ... ok
 test tests::worker_drains_full_and_partial_batches_without_losing_samples ... ok
 test tests::process_keeps_per_request_pairing ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
 
      Running unittests ../../src/ping_common.rs (target/debug/deps/ping_common-fa376fc1e88fd9be)
 

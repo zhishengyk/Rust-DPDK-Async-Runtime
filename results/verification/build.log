@@ -2,4 +2,4 @@
    Compiling ping-common v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/crates/ping-common)
    Compiling async-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/async-ping)
    Compiling raw-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/raw-ping)
-    Finished `release` profile [optimized] target(s) in 5.59s
+    Finished `release` profile [optimized] target(s) in 5.25s

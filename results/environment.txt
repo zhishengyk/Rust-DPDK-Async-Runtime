@@ -1,13 +1,57 @@
 测量日期：2026-10-06（北京时间）
-代码提交：d6f45bea5dcd7b256f48c20e6e0c887783eaedb0
-收发核 2；统计核 3；系统默认核 0–1。A/C 的 C 保留 Adaptive RX=on、rx-usecs=20。
-以下原始时间为 UTC。
+代码提交：59790e7c927ff21528a427c3d6b0c47132babb10
+A/B 均启用全量原始打点。收发核 2；统计与写盘核 3；系统默认核 0–1。
+C 保留 Adaptive RX=on、rx-usecs=20。以下时间为 UTC。
 
-Mon Oct  5 17:13:50 UTC 2026
+Tue Oct  6 01:06:15 UTC 2026
+Linux ip-10-202-11-18.ap-northeast-1.compute.internal 6.18.48-107.148.amzn2023.x86_64 #2 SMP PREEMPT_DYNAMIC Tue Sep  8 22:48:17 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
 BOOT_IMAGE=(hd0,gpt1)/boot/vmlinuz-6.18.48-107.148.amzn2023.x86_64 root=UUID=53e8e4c5-7263-4b35-8691-edf05a740452 ro console=tty0 console=ttyS0,115200n8 nvme_core.io_timeout=4294967295 rd.emergency=poweroff rd.shell=0 selinux=1 security=selinux quiet isolcpus=domain,managed_irq,2-3 nohz_full=2-3 rcu_nocbs=2-3 irqaffinity=0-1
 2-3
 2-3
-disabled
+inactive
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           48 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  4
+On-line CPU(s) list:                     0-3
+Vendor ID:                               AuthenticAMD
+Model name:                              AMD EPYC 9R45
+CPU family:                              26
+Model:                                   2
+Thread(s) per core:                      1
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                1
+BogoMIPS:                                5200.00
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch topoext perfctr_core ssbd perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 clzero xsaveerptr rdpru wbnoinvd arat avx512vbmi pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid movdiri movdir64b fsrm avx512_vp2intersect flush_l1d
+Hypervisor vendor:                       KVM
+Virtualization type:                     full
+L1d cache:                               192 KiB (4 instances)
+L1i cache:                               128 KiB (4 instances)
+L2 cache:                                4 MiB (4 instances)
+L3 cache:                                16 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-3
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Mitigation; IBPB on VMEXIT only
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP disabled; PBRSB-eIBRS Not affected; BHI Not affected
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
 Coalesce parameters for enp39s0:
 Adaptive RX: on  TX: n/a
 stats-block-usecs: n/a
@@ -37,14 +81,13 @@ tx-frame-high: n/a
 
 CQE mode RX: n/a  TX: n/a
 
-138ab6eb0d90825a19095b55a74ad33b430bc095ccb6ccbea6176e651c78a2f7  target/release/async-ping
-b48882d8244c4d04a0d61da57770dc4904490bb4ab6c50952d20456699cb360f  target/release/raw-ping
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p1   50G   17G   34G  34% /
 
-一键入口运行记录：
 Running a: 60 seconds
 Running a: 600 seconds
 Running b: 600 seconds
-results/ab-20261005T171350Z/SUMMARY.md
+results/ab-20261006T010514Z/SUMMARY.md
 Running A: 60 seconds
 Running C: 60 seconds
-results/ac-20261005T173452Z/SUMMARY.md
+results/ac-20261006T012620Z/SUMMARY.md

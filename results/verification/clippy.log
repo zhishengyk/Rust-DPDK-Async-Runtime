@@ -1,5 +1,5 @@
     Checking metrics v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/crates/metrics)
     Checking ping-common v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/crates/ping-common)
-    Checking async-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/async-ping)
     Checking raw-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/raw-ping)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.54s
+    Checking async-ping v0.1.0 (/home/ec2-user/Rust-DPDK-Async-Runtime/bins/async-ping)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s

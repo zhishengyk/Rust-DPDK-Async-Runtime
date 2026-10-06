@@ -1,0 +1,5 @@
+file	records	uncompressed_bytes	compressed_bytes	sha256
+/home/ec2-user/Rust-DPDK-Async-Runtime/results/ab-20261006T010514Z/a-60.ticks.gz	17462795	1117618944	239260309	635212707ef660a5f3e7c6a9cbab9df63b60991e9127400b044b576c80d70eb8
+/home/ec2-user/Rust-DPDK-Async-Runtime/results/ab-20261006T010514Z/a-600.ticks.gz	174764057	11184899712	2416955488	ba492cc2d1d222e65dc265bd273b3b274847ccb0579501406f5541d2e2098c91
+/home/ec2-user/Rust-DPDK-Async-Runtime/results/ab-20261006T010514Z/b-600.ticks.gz	174821339	11188565760	2417260339	4fbfcbd9240acfefa89298c295f6fed68a9a85e3dddd780cd0319cff561ae949
+/home/ec2-user/Rust-DPDK-Async-Runtime/results/ac-20261006T012620Z/a.ticks.gz	180206	11533248	2548555	015dc6fdb5bb4ff9c92f63f2e0a7a8be36672779fde203f4bb6619ae7af1008c

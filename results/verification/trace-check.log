@@ -1,0 +1,3 @@
+file=results/full-trace-20261006/check/trace.ticks hz=2600000000 records=17241140 invalid=0 delta_gcd_ticks=26
+kind1=5747068 kind2=5747068 kind3=5747004 kind4=0 kind5=0 kind6=0 kind7=0 
+t1_t0_max_ns=20220 t3_t2_max_ns=16370 process_max_ns=20440 end_to_end_max_ns=355760 timer_max_ns=39510 sleep_error_max_ns=39280 
