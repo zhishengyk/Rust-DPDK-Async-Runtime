@@ -175,7 +175,7 @@ impl Port {
         (packets, t2)
     }
     /// 驱动接纳成功才转移 mbuf；失败返回原所有者，由调用者重试或 Drop 释放。
-    pub fn send(&mut self, packet: Mbuf) -> Result<u64, Mbuf> {
+    pub fn send(&mut self, packet: Mbuf) -> Result<u64, (Mbuf, u64)> {
         let mut t1 = 0;
         if unsafe { w_tx(packet.ptr.as_ptr(), &mut t1) } == 1 {
             // mbuf 指针已经属于 PMD：跳过 Mbuf::drop，仅释放 Rust 侧的 Pool 引用。
@@ -185,7 +185,7 @@ impl Port {
             }
             Ok(t1)
         } else {
-            Err(packet)
+            Err((packet, t1))
         }
     }
     /// 调用 C 适配层驱动 DPDK 定时维护；执行频率由共用 I/O 层控制。

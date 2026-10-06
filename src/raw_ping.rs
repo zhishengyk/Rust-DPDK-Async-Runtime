@@ -83,10 +83,15 @@ fn run() -> Result<(), String> {
                         }
                         State::Sleeping { sample, measured } => {
                             if measured {
-                                io.metrics.sleep_error(now() - s.deadline);
+                                io.metrics.sleep_error(
+                                    sid,
+                                    s.seq.wrapping_sub(1),
+                                    s.deadline,
+                                    now(),
+                                );
                             }
                             if let Some(sample) = sample {
-                                io.record(sample);
+                                io.record(sid, sample);
                             }
                             if now() >= io.end {
                                 live -= 1;
