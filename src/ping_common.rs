@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 use clap::Parser;
 use dpdk::{Mbuf, Port};
-use metrics::{now, Clock, Recorder};
+use metrics::{now, Clock, Kind, Recorder};
 use serde::Serialize;
 use std::net::Ipv4Addr;
 use wire::{Network, Packet, TxTemplate};
@@ -48,6 +48,9 @@ pub struct Options {
     #[arg(long, default_value = "report.json")]
     // 最终 JSON 报告的文件路径，停止测量后才写入。
     pub output: String,
+    #[arg(long)]
+    // 仅用于对照日志开销；默认记录每个请求的原始打点。
+    pub no_trace: bool,
 }
 /// 把冒号分隔的六个十六进制字节解析成 MAC 地址；格式错误作为命令行解析错误返回。
 fn parse_mac(s: &str) -> Result<[u8; 6], String> {
@@ -135,7 +138,7 @@ pub struct Shared {
     pub expected: Vec<Option<Stamp>>,
     /// 收发线程维护的成功、失败、迟到和协议处理计数。
     pub counters: Counters,
-    /// 统计生产者，缓存 TSC 差值并批量提交到后台 SPSC 队列。
+    /// 统计生产者，缓存原始 TSC 打点并批量提交到后台 SPSC 队列。
     pub metrics: Recorder,
     /// 超时请求列表；后续收到迟到包时更新对应条目的 late 标志。
     pub losses: Vec<Loss>,
@@ -161,7 +164,17 @@ impl Shared {
             return Err("stats-core must differ from core".into());
         }
         let stats_core = options.stats_core;
-        let metrics = Recorder::new(clock, move || dpdk::pin_thread(stats_core));
+        let trace = if options.no_trace {
+            None
+        } else {
+            Some(
+                std::fs::File::create(
+                    std::path::Path::new(&options.output).with_extension("ticks"),
+                )
+                .map_err(|e| format!("create raw trace: {e}"))?,
+            )
+        };
+        let metrics = Recorder::new(clock, trace, move || dpdk::pin_thread(stats_core));
         let net = Network {
             mac: port.mac,
             ip: options.src_ip.octets(),
@@ -219,13 +232,17 @@ impl Shared {
         let frame = self.templates[sid].emit(seq, t0);
         let Some(mut packet) = self.port.alloc(frame.len()) else {
             self.counters.alloc_failed += 1;
+            self.metrics
+                .event(Kind::AllocFailed, sid, seq, [t0, 0, 0, 0, 0, 0]);
             return None;
         };
         packet.data_mut().copy_from_slice(frame);
         let t1 = match self.port.send(packet) {
             Ok(t1) => t1,
-            Err(_) => {
+            Err((_packet, t1)) => {
                 self.counters.tx_failed += 1;
+                self.metrics
+                    .event(Kind::TxFailed, sid, seq, [t0, t1, 0, 0, 0, 0]);
                 return None;
             }
         };
@@ -240,7 +257,7 @@ impl Shared {
         self.counters.tx += 1;
         if let Some(deadline) = sleep_deadline {
             // 段③：上次 sleep 到期 → 下一次 T0，包含恢复后统计/释放等工作，单独报告。
-            self.metrics.timer(t0 - deadline);
+            self.metrics.timer(sid, seq, deadline, t0);
         }
         Some(stamp)
     }
@@ -265,6 +282,8 @@ impl Shared {
                         if !s.late_seen {
                             s.late_seen = true;
                             self.counters.late_reply += 1;
+                            self.metrics
+                                .event(Kind::Late, session, seq, [t0, 0, t2, 0, 0, 0]);
                         }
                         return None;
                     }
@@ -278,6 +297,8 @@ impl Shared {
                 {
                     loss.late = true;
                     self.counters.late_reply += 1;
+                    self.metrics
+                        .event(Kind::Late, session, seq, [t0, 0, t2, 0, 0, 0]);
                 }
             }
         }
@@ -294,6 +315,12 @@ impl Shared {
         // 超时不进入成功 reply 的延迟分布；保留请求身份，结束时对账迟到/失踪情况。
         let stamp = self.expected[sid].take().unwrap();
         self.counters.timeout += 1;
+        self.metrics.event(
+            Kind::Timeout,
+            sid,
+            stamp.seq,
+            [stamp.t0, stamp.t1, 0, 0, 0, 0],
+        );
         self.losses.push(Loss {
             session: sid,
             seq: stamp.seq,
@@ -302,9 +329,12 @@ impl Shared {
         });
     }
     /// 在 sleep 后把该请求的四个打点提交给统计器，再释放独占的 RX mbuf。
-    pub fn record(&mut self, sample: Sample) {
-        self.metrics
-            .reply(sample.stamp.t0, sample.stamp.t1, sample.reply.t2, sample.t3);
+    pub fn record(&mut self, sid: usize, sample: Sample) {
+        self.metrics.reply(
+            sid,
+            sample.stamp.seq,
+            [sample.stamp.t0, sample.stamp.t1, sample.reply.t2, sample.t3],
+        );
         drop(sample.reply.mbuf);
     }
     /// 每约 1ms 调用一次 DPDK 驱动维护；调用者将它放在当前轮交付 reply 和 poll 之后。
@@ -333,14 +363,17 @@ impl Shared {
         // 停止/关闭端口后，RX 描述符和未回收的 TX mbuf 才会归还内存池。
         let (initial, final_count) = self.port.finish();
         let missing = self.losses.iter().filter(|l| !l.late).count();
-        // 停止收发后排空统计队列并等候最终分位数；写日志/JSON 不进入测量窗口。
-        let latency = self.metrics.finish();
+        // 停止收发后排空统计队列并等候最终分位数；原始日志在测量中写入，最终刷盘/JSON 输出在窗口后完成。
+        let (latency, trace_records) = self.metrics.finish();
         // 每个成功提交的 request 必须落在成功或超时之一；迟到是超时的补充分类。
         let accounted = self.counters.tx == self.counters.rx + self.counters.timeout;
         let report = serde_json::json!({
             "client": label, "options": self.options,
             "elapsed_sec": (measured_end-self.start) as f64 / self.clock.hz as f64,
             "units": "ns",
+            "tsc_hz": self.clock.hz,
+            "trace_records": trace_records,
+            "raw_trace": (!self.options.no_trace).then(|| std::path::Path::new(&self.options.output).with_extension("ticks")),
             "latency": latency, "counters": self.counters, "losses": self.losses,
             "missing": missing, "accounted": accounted,
             "mempool": {"initial": initial, "final": final_count, "leak_free": initial == final_count}

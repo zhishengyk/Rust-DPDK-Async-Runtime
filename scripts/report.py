@@ -35,8 +35,8 @@ for name, d in runs:
             lines.append(f"{name}：{c['timeout']} 次请求超过设定超时，按超时丢包计数；其中 {c['late_reply']} 个回复随后匹配到原请求。每个请求身份和迟到状态见 losses；这些记录不能单独确定延迟发生在本机、网络还是对端。")
 lines += ['', *table(['运行', '秒', 'TX', 'RX', 'TX/秒', '超时/丢包', '迟到', '未收到', 'mbuf 初/末'], rows)]
 labels = {'t1_t0': 'T1−T0', 't3_t2': 'T3−T2', 'process': '(T1−T0)+(T3−T2)',
-          'timer': 'T0′−T4', 'sleep_error': 'T5−T4', 'end_to_end': 'T3−T0'}
-metrics = ('t1_t0', 't3_t2', 'process', 'timer', 'sleep_error') if mode == 'ab' else ('end_to_end',)
+          'timer': 'T0′−T4', 'end_to_end': 'T3−T0'}
+metrics = ('t1_t0', 't3_t2', 'process', 'timer') if mode == 'ab' else ('end_to_end',)
 lines += ['', '## 延迟（ns）', '']
 rows = [[f'{name}/{labels[metric]}', *[d['latency'][metric][q] for q in quantiles],
          d['latency'][metric]['count']] for name, d in runs for metric in metrics]
@@ -62,7 +62,7 @@ lines += ['', '## 时间戳说明', '',
           'T2：rx_burst 返回，同一批报文共用；T3：回复交给对应 session。']
 if mode == 'ab':
     lines += ['T4：收到回复后等待的到期时刻；T5：等待结束、会话恢复执行的时刻；T0′：下一次请求的 T0。',
-              'T1−T0 为发送处理时间，T3−T2 为接收交付时间；T0′−T4 为到期至下次发送的延迟，T5−T4 为恢复执行的超期量。',
+              'T1−T0 为发送处理时间，T3−T2 为接收交付时间；T0′−T4 为到期至下次发送的延迟。',
               '60 秒演示和 T3−T0 不列入本汇总，原始日志及 JSON 保留完整测量。']
 else:
     lines += ['T3−T0 为一次请求至回复交付的往返时间，不含两次请求间的等待。',

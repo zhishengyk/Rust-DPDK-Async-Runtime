@@ -5,6 +5,8 @@ use serde::Serialize;
 use std::{
     arch::x86_64::{_mm_lfence, _rdtsc},
     collections::BTreeMap,
+    fs::File,
+    io::{BufWriter, Write},
     sync::{
         atomic::{compiler_fence, Ordering},
         mpsc::sync_channel,
@@ -107,21 +109,42 @@ pub struct Summary {
 }
 
 #[derive(Clone, Copy)]
-/// 跨线程传递的纯数值事件；所有负载都是 TSC 差值，不含 mbuf 或 session 引用。
-enum Event {
-    /// 同一条成功请求的三段原始差值，用来保持逐请求配对关系。
-    Reply {
-        /// T1−T0，单位 TSC ticks。
-        send: u64,
-        /// T3−T2，单位 TSC ticks。
-        receive: u64,
-        /// T3−T0，单位 TSC ticks，包含网络往返与接收前等待。
-        end_to_end: u64,
-    },
-    /// 唯一字段为 sleep deadline 到下一次 T0 的差值，单位 TSC ticks。
-    Timer(u64),
-    /// 唯一字段为 sleep deadline 到 task 恢复时刻的差值，单位 TSC ticks。
-    SleepError(u64),
+#[repr(u64)]
+pub enum Kind {
+    Reply = 1,
+    Sleep = 2,
+    Timer = 3,
+    Timeout = 4,
+    Late = 5,
+    AllocFailed = 6,
+    TxFailed = 7,
+}
+
+/// 原始打点事件；没有发生的时刻填 0，不推算或伪造时间戳。
+#[derive(Clone, Copy)]
+struct Event {
+    kind: Kind,
+    id: u64,     // session << 32 | seq；T0 及每个 session 的顺序区分 seq 回绕。
+    t: [u64; 6], // T0、T1、T2、T3、T4、T5，原始 TSC ticks。
+}
+impl Event {
+    fn bytes(self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        let values = [
+            self.kind as u64,
+            self.id,
+            self.t[0],
+            self.t[1],
+            self.t[2],
+            self.t[3],
+            self.t[4],
+            self.t[5],
+        ];
+        for (chunk, value) in bytes.chunks_exact_mut(8).zip(values) {
+            chunk.copy_from_slice(&value.to_le_bytes());
+        }
+        bytes
+    }
 }
 
 /// 后台线程独占四组任务指标及发送、接收两段分布。
@@ -141,20 +164,20 @@ impl Histograms {
     }
     /// 消费一条数值事件：先把该请求的发送/接收 ticks 相加，再换算并分别入桶。
     fn record(&mut self, event: Event) {
-        match event {
-            Event::Reply {
-                send,
-                receive,
-                end_to_end,
-            } => {
+        let [t0, t1, t2, t3, t4, t5] = event.t;
+        match event.kind {
+            Kind::Reply => {
+                let send = t1 - t0;
+                let receive = t3 - t2;
                 // 每个请求先按 ticks 相加，再换算 ns；不能把两个分位数相加。
                 self.values[0].record(self.clock.ns(send + receive));
-                self.values[1].record(self.clock.ns(end_to_end));
+                self.values[1].record(self.clock.ns(t3 - t0));
                 self.values[4].record(self.clock.ns(send));
                 self.values[5].record(self.clock.ns(receive));
             }
-            Event::Timer(ticks) => self.values[2].record(self.clock.ns(ticks)),
-            Event::SleepError(ticks) => self.values[3].record(self.clock.ns(ticks)),
+            Kind::Timer => self.values[2].record(self.clock.ns(t0 - t4)),
+            Kind::Sleep => self.values[3].record(self.clock.ns(t5 - t4)),
+            _ => {}
         }
     }
     /// 生成按指标名排列的最终摘要，供前台在停止收发后序列化和打印。
@@ -185,7 +208,11 @@ impl Batch {
     /// 初始化一个可重复使用的本地事件数组；len=0 表示还没有有效事件。
     fn new() -> Self {
         Self {
-            events: [Event::Timer(0); BATCH_SIZE],
+            events: [Event {
+                kind: Kind::Timer,
+                id: 0,
+                t: [0; 6],
+            }; BATCH_SIZE],
             len: 0,
         }
     }
@@ -199,12 +226,16 @@ pub struct Recorder {
     /// SPSC 单生产者端，按批把数值发布给后台线程。
     sender: Producer<Event>,
     /// 后台统计线程的句柄；finish 通过 join 取回完整摘要。
-    worker: JoinHandle<BTreeMap<&'static str, Summary>>,
+    worker: JoinHandle<(BTreeMap<&'static str, Summary>, u64)>,
 }
 impl Recorder {
     /// 创建 SPSC 队列和统计线程，在线程中执行 worker_init（生产环境用于绑核）。
     /// 等待线程初始化直方图完成后才返回，避免把启动成本混进测量窗口。
-    pub fn new(clock: Clock, worker_init: impl FnOnce() + Send + 'static) -> Self {
+    pub fn new(
+        clock: Clock,
+        trace: Option<File>,
+        worker_init: impl FnOnce() + Send + 'static,
+    ) -> Self {
         let (sender, mut receiver) = RingBuffer::<Event>::new(BATCH_SIZE * QUEUE_BATCHES);
         let (ready, started) = sync_channel(0);
         let worker = thread::Builder::new()
@@ -212,17 +243,36 @@ impl Recorder {
             .spawn(move || {
                 worker_init(); // EAL 主线程已绑核；子线程必须改绑，避免继承收发核的 affinity。
                 let mut histograms = Histograms::new(clock);
+                let mut trace = trace.map(|file| BufWriter::with_capacity(1024 * 1024, file));
+                let mut records = 0;
+                if let Some(file) = &mut trace {
+                    let mut header = [0; 64];
+                    header[..8].copy_from_slice(b"DPDKTS01");
+                    header[8..16].copy_from_slice(&clock.hz.to_le_bytes());
+                    file.write_all(&header).expect("cannot write trace header");
+                }
                 ready.send(()).unwrap();
                 loop {
                     // 先看发送端是否关闭，再读队列，避免退出检查与最后一批发布竞争而丢尾包。
                     let closed = receiver.is_abandoned();
                     match receiver.pop() {
-                        Ok(event) => histograms.record(event),
+                        Ok(event) => {
+                            histograms.record(event);
+                            if let Some(file) = &mut trace {
+                                file.write_all(&event.bytes())
+                                    .expect("cannot write raw trace");
+                                records += 1;
+                            }
+                        }
                         Err(_) if closed => break,
                         Err(_) => std::hint::spin_loop(),
                     }
                 }
-                histograms.summaries()
+                if let Some(mut file) = trace {
+                    file.flush().expect("cannot flush raw trace");
+                    file.get_ref().sync_all().expect("cannot sync raw trace");
+                }
+                (histograms.summaries(), records)
             })
             .expect("cannot start statistics thread");
         // 统计线程绑核、分配直方图完成后才允许开始测量。
@@ -262,24 +312,27 @@ impl Recorder {
         }
         self.batch.len = 0;
     }
-    /// 从一条成功请求的 T0～T3 计算发送、接收和端到端 ticks 差值，提交同一个事件。
-    pub fn reply(&mut self, t0: u64, t1: u64, t2: u64, t3: u64) {
-        self.record(Event::Reply {
-            send: t1 - t0,
-            receive: t3 - t2,
-            end_to_end: t3 - t0,
+    /// 发布原始打点，换算、分桶和缓冲写盘都由统计线程完成。
+    pub fn event(&mut self, kind: Kind, session: usize, seq: u16, t: [u64; 6]) {
+        self.record(Event {
+            kind,
+            id: ((session as u64) << 32) | seq as u64,
+            t,
         });
     }
-    /// 提交 sleep deadline 到下一次 T0 的 ticks 差值；这项不计入 process。
-    pub fn timer(&mut self, ticks: u64) {
-        self.record(Event::Timer(ticks));
+    pub fn reply(&mut self, session: usize, seq: u16, t: [u64; 4]) {
+        self.event(Kind::Reply, session, seq, [t[0], t[1], t[2], t[3], 0, 0]);
     }
-    /// 提交 sleep deadline 到恢复执行时刻的 ticks 差值。
-    pub fn sleep_error(&mut self, ticks: u64) {
-        self.record(Event::SleepError(ticks));
+    /// 提交 sleep deadline 和下一次 T0 的原始打点；这项不计入 process。
+    pub fn timer(&mut self, session: usize, seq: u16, deadline: u64, t0: u64) {
+        self.event(Kind::Timer, session, seq, [t0, 0, 0, 0, deadline, 0]);
+    }
+    /// 提交 sleep deadline 和恢复执行时刻的原始打点。
+    pub fn sleep_error(&mut self, session: usize, seq: u16, deadline: u64, resumed: u64) {
+        self.event(Kind::Sleep, session, seq, [0, 0, 0, 0, deadline, resumed]);
     }
     /// 提交尾批并关闭生产者，等待后台排空后返回摘要。
-    pub fn finish(mut self) -> BTreeMap<&'static str, Summary> {
+    pub fn finish(mut self) -> (BTreeMap<&'static str, Summary>, u64) {
         self.flush(); // 最后一批不足 256 条也必须提交。
         drop(self.sender); // receiver 排空后退出，再汇总；没有后台线程悬挂。
         self.worker.join().expect("statistics thread panicked")
@@ -293,16 +346,28 @@ mod tests {
     #[test]
     /// 验证统计线程收齐整批与不足一批的尾部，并保留各类事件的计数和最大值。
     fn worker_drains_full_and_partial_batches_without_losing_samples() {
-        let mut recorder = Recorder::new(Clock { hz: 1_000_000_000 }, || {});
+        let path = std::env::temp_dir().join(format!("dpdk-trace-test-{}", std::process::id()));
+        let file = File::create(&path).unwrap();
+        let mut recorder = Recorder::new(Clock { hz: 1_000_000_000 }, Some(file), || {});
         let n = BATCH_SIZE * 2 + 7;
         for i in 0..n {
-            recorder.reply(0, 7, 20, 33);
-            recorder.sleep_error(i as u64);
+            recorder.reply(3, i as u16, [0, 7, 20, 33]);
+            recorder.sleep_error(3, i as u16, 1000, 1000 + i as u64);
             if i % 2 == 0 {
-                recorder.timer(i as u64);
+                recorder.timer(3, i as u16, 1000, 1000 + i as u64);
             }
         }
-        let r = recorder.finish();
+        let (r, records) = recorder.finish();
+        let raw = std::fs::read(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(&raw[..8], b"DPDKTS01");
+        assert_eq!(records as usize, n * 2 + n.div_ceil(2));
+        assert_eq!(raw.len(), 64 + records as usize * 64);
+        let first: Vec<_> = raw[64..128]
+            .chunks_exact(8)
+            .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+            .collect();
+        assert_eq!(first, [1, 3 << 32, 0, 7, 20, 33, 0, 0]);
         assert_eq!(r.len(), 6);
         for metric in ["process", "end_to_end", "sleep_error", "t1_t0", "t3_t2"] {
             assert_eq!(r[metric].count, n as u64);
@@ -339,15 +404,15 @@ mod tests {
     /// 验证 process 对每个请求先求发送加接收，再统计分位数；不能直接相加两组 p99。
     fn process_keeps_per_request_pairing() {
         let mut h = Histograms::new(Clock { hz: 1_000_000_000 });
-        h.record(Event::Reply {
-            send: 10,
-            receive: 90,
-            end_to_end: 200,
+        h.record(Event {
+            kind: Kind::Reply,
+            id: 0,
+            t: [0, 10, 110, 200, 0, 0],
         });
-        h.record(Event::Reply {
-            send: 90,
-            receive: 10,
-            end_to_end: 300,
+        h.record(Event {
+            kind: Kind::Reply,
+            id: 0,
+            t: [0, 90, 290, 300, 0, 0],
         });
         let r = h.summaries();
         assert_eq!(r["process"].p99, 100);
