@@ -8,15 +8,25 @@ A 是 async-ping，B 是相同行为的裸 busy-poll，C 是系统 ping。
 Amazon Linux 2023、AWS c8a.xlarge、两张 ENA、passwordless sudo。
 Rust **1.90.0**，DPDK **23.11.5**。首次部署运行 `./scripts/setup.sh --isolate-on-reboot`，安装依赖、编译、配置大页、DPDK 网卡及启动隔离，然后 `sudo reboot`。
 device-number 0 留给 SSH/内核；另一张绑定 vfio-pci。运行配置由脚本生成到 `env.sh`。
-重启后先运行 `./scripts/prepare-host.sh`，再执行下面的测试。
+重启后先运行 `./scripts/setup.sh prepare`，再执行下面的测试。
 
 一键测试并生成汇总：`./scripts/run.sh ab`（A/B）或 `./scripts/run.sh ac`（A/C）。
 结果保存在新的 `results/ab-时间戳/` 或 `results/ac-时间戳/` 目录，结束后打印 `SUMMARY.md` 路径。
 
+单独运行也统一使用这个入口：
+
+```bash
+./scripts/run.sh a --delay-us 500 --duration-sec 60
+./scripts/run.sh b --delay-us 500 --duration-sec 60
+./scripts/run.sh c 60
+```
+
+每次运行创建新的结果目录，单独运行 A/B 时可追加客户端参数。测量日志与汇总放在独立分支 [codex/latency-results-20261006](https://github.com/zhishengyk/Rust-DPDK-Async-Runtime/tree/codex/latency-results-20261006/results)，入口为该分支的 results/README.md。
+
 ## 直接运行
 
 以下是本机的原始命令，在仓库根目录分别执行，等上一个完成后再运行下一个。
-首次准备：`mkdir -p results/ab results/ac`。A/B 默认使用核 2、payload 64B、对端 `10.202.8.15`。
+首次准备：`mkdir -p results/local/ab results/local/ac`。A/B 默认使用核 2、payload 64B、对端 `10.202.8.15`。
 结束后终端显示统计，`--output` 指定 JSON 文件；相同文件名会覆盖旧结果。
 
 ### A/B：正式测试
@@ -25,16 +35,16 @@ A 和 B 都是 64 session、delay 500µs、持续 600 秒：
 
 ```bash
 sudo target/release/async-ping --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
-  --sessions 64 --delay-us 500 --duration-sec 600 --output results/ab/a-600.json
+  --sessions 64 --delay-us 500 --duration-sec 600 --output results/local/ab/a-600.json
 ```
 
 ```bash
 sudo target/release/raw-ping --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
-  --sessions 64 --delay-us 500 --duration-sec 600 --output results/ab/b-600.json
+  --sessions 64 --delay-us 500 --duration-sec 600 --output results/local/ab/b-600.json
 ```
 
-60 秒现场演示：把 A 命令中的 `--duration-sec 600` 改为 `60`，输出改为 `results/ab/a-60.json`。
-需要保留终端日志时，在命令后追加 `2>&1 | tee results/ab/a-600.log`，B/演示使用各自文件名。
+60 秒现场演示：把 A 命令中的 `--duration-sec 600` 改为 `60`，输出改为 `results/local/ab/a-60.json`。
+需要保留终端日志时，在命令后追加 `2>&1 | tee results/local/ab/a-600.log`，B/演示使用各自文件名。
 
 ### A/C：单会话端到端对照
 
@@ -42,14 +52,14 @@ A：一个 session，收到回复后等待 950µs，运行 60 秒。
 
 ```bash
 sudo target/release/async-ping --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
-  --sessions 1 --delay-us 950 --duration-sec 60 --output results/ac/a.json
+  --sessions 1 --delay-us 950 --duration-sec 60 --output results/local/ac/a.json
 ```
 
 C：系统 ping，同一客户端核、对端和包长，每 1ms 发包，运行 60 秒；同时显示并保存日志。
 
 ```bash
 sudo taskset -c 2 ping -n -U -I enp39s0 -i 0.001 -s 64 -w 60 -W 1 10.202.8.15 \
-  | tee results/ac/c.log
+  | tee results/local/ac/c.log
 ```
 
 A 的 950µs 等待加约 50µs RTT，对应约 1000pps，与 C 匹配；不能直接把两边的间隔参数设成相同数值。
@@ -63,18 +73,18 @@ C 的 `-U` 计到用户态接收；原生命令显示逐包 RTT 和 min/avg/max�
 测量命令各自独立运行，下面仅汇总已有文件，不会重新发包：
 
 ```bash
-python3 scripts/report.py ab results/ab
-python3 scripts/report-c.py results/ac/c.log results/ac/c.json 60
-python3 scripts/report.py ac results/ac
+python3 scripts/report.py ab results/local/ab
+python3 scripts/report.py c results/local/ac/c.log results/local/ac/c.json 60
+python3 scripts/report.py ac results/local/ac
 ```
 
-输出 `results/ab/SUMMARY.md` 和 `results/ac/SUMMARY.md`；JSON 延迟单位是 ns，除以 1000 得 µs。
-交付时保留对应 JSON 和日志。A/B 汇总只列 600 秒结果，不列 60 秒演示和 T3−T0。
+输出 `results/local/ab/SUMMARY.md` 和 `results/local/ac/SUMMARY.md`；JSON 延迟单位是 ns，除以 1000 得 µs。
+交付时保留对应 JSON 和日志。A/B 汇总列出 600 秒结果的全部延迟指标；60 秒演示保留独立日志和 JSON。
 
 A/B 默认另存同名 `.ticks` 全量打点日志；`.log` 是终端输出，不能替代原始打点。
 记录请求测量的 T0–T5，不记录空轮询、ARP 或 runtime 内部的时钟查询。按事件保存原始 TSC，不采样、不按纳秒取整；统计线程在核 3 缓冲写盘，队列满时等待，不能静默丢记录。完整记录仍有复制和 I/O 开销，`--no-trace` 仅用于验证这部分开销。
 64 session 的每个 600 秒日志约 11GB，运行前留足空间；结束后可用 `gzip -1 文件.ticks` 无损压缩。
-查看前 10 条：`python3 scripts/read-trace.py 文件.ticks --limit 10`；省略 `--limit` 导出全部 CSV，也支持 `.ticks.gz`。
+查看前 10 条：`python3 scripts/report.py trace 文件.ticks --limit 10`；省略 `--limit` 导出全部 CSV，也支持 `.ticks.gz`。
 
 格式：64B 文件头，前 8B 为 `DPDKTS01`，接下来 8B 为小端 TSC Hz；随后每条 64B，依次为 8 个小端 u64：事件类型、`session<<32|seq`、T0、T1、T2、T3、T4、T5。
 类型 1=回复（T0–T3），2=等待结束（T4/T5），3=下次发送（T0′及前次 T4），4=超时（T0/T1），5=迟到（T0/T2），6=分配失败（T0），7=提交失败（T0/T1）；未发生的时刻填 0。记录按事件发布顺序排列，并非全局时间排序。按 session 的事件顺序关联请求，seq 回绕时结合 T0 区分。C 保留逐包 ping 原文，不伪造它未提供的内部时间戳。
@@ -100,7 +110,7 @@ mbuf 由 Rust 唯一所有权和 Drop 管理；ICMP checksum 增量更新。
 | T1−T0 | 发送处理时间 |
 | T3−T2 | 接收交付时间 |
 | (T1−T0)+(T3−T2) | 每个请求的两段之和，A−B 的排名指标 |
-| T3−T0 | 往返时间；A/C 汇总使用，A/B 只在原始结果保留 |
+| T3−T0 | 往返时间；A/B 与 A/C 汇总均保留 |
 | T0′−T4 | 等待到期至下次发送的延迟 |
 
 各项均输出 p50/p90/p99/p99.9/p99.99/max 和样本数；C 只统计 T3−T0，来自 ping -U，没有内部 T1/T2 打点。
@@ -113,17 +123,21 @@ mbuf 由 Rust 唯一所有权和 Drop 管理；ICMP checksum 增量更新。
 
 ## 运维与交付
 
-重启后运行 `./scripts/prepare-host.sh` 恢复大页和网卡绑定。已有部署启用隔离：先运行 `./scripts/prepare-host.sh --isolate-on-reboot`，再重启。
+重启后运行 `./scripts/setup.sh prepare` 恢复大页和网卡绑定。已有部署启用隔离：先运行 `./scripts/setup.sh prepare --isolate-on-reboot`，再重启。
 系统进程默认使用核 0–1；核 2 收发、核 3 统计。启动参数为 `isolcpus=domain,managed_irq,2-3 nohz_full=2-3 rcu_nocbs=2-3 irqaffinity=0-1`。
 脚本禁用 irqbalance，并将可迁移 IRQ、非绑定 workqueue 放到 0–1；启动隔离必须重启才生效，可用 `cat /sys/devices/system/cpu/isolated` 确认输出 `2-3`。
-恢复内核网卡驱动用 `./scripts/restore-nic.sh`。更换网卡时修改以下位置：
+恢复内核网卡驱动用 `./scripts/setup.sh restore`。
+
+`scripts/` 只保留 3 个脚本：`setup.sh` 负责安装、网卡发现、主机配置和网卡恢复；`run.sh` 负责 A/B/C 的独立运行与组合测试；`report.py` 负责 A/B/C 报告和原始打点读取。
+
+更换网卡时修改以下位置：
 
 | 位置 | 需要修改的配置 |
 |---|---|
 | `env.sh` | DPDK 网卡的 `BDF`、`SRC_IP`、`DPDK_IF`；内核网卡变化时改 `KERNEL_IF` |
 | 上面的原始命令 | 同步改 `--bdf`、`--src-ip` 和 C 的 `-I`；原始命令不会读取 `env.sh` |
 | `scripts/setup.sh` | 非 ENA 网卡需将 `-Denable_drivers=net/ena,mempool/ring` 中的 `net/ena` 改为对应 PMD，并重新构建 DPDK 和程序 |
-| `scripts/restore-nic.sh` | 非 ENA 网卡需将 `echo ena` 改为对应内核驱动名 |
+| `scripts/setup.sh` | 非 ENA 网卡需将 `echo ena` 改为对应内核驱动名 |
 
 首次发现脚本面向 AWS 双 ENI；已有 `env.sh` 时不会自动重新发现。换对端还需改 `PEER_IP`、`PEER_MAC`，原始 A/B 命令显式传 `--peer-ip`、`--peer-mac`，C 改目标 IP。
 
