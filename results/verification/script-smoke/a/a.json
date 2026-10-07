@@ -1,0 +1,103 @@
+{
+  "accounted": true,
+  "client": "A",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_tx_failed": 0,
+    "late_reply": 0,
+    "rx": 99100,
+    "timeout": 0,
+    "tx": 99100,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 1.00045584,
+  "latency": {
+    "end_to_end": {
+      "count": 99100,
+      "max": 262210,
+      "p50": 159390,
+      "p90": 163190,
+      "p99": 229210,
+      "p999": 233480,
+      "p9999": 249530
+    },
+    "process": {
+      "count": 99100,
+      "max": 23560,
+      "p50": 250,
+      "p90": 470,
+      "p99": 810,
+      "p999": 1040,
+      "p9999": 2530
+    },
+    "sleep_error": {
+      "count": 99100,
+      "max": 33560,
+      "p50": 150,
+      "p90": 640,
+      "p99": 1200,
+      "p999": 3580,
+      "p9999": 27650
+    },
+    "t1_t0": {
+      "count": 99100,
+      "max": 23380,
+      "p50": 80,
+      "p90": 290,
+      "p99": 620,
+      "p999": 770,
+      "p9999": 2290
+    },
+    "t3_t2": {
+      "count": 99100,
+      "max": 2620,
+      "p50": 160,
+      "p90": 270,
+      "p99": 380,
+      "p999": 570,
+      "p9999": 2000
+    },
+    "timer": {
+      "count": 99036,
+      "max": 33790,
+      "p50": 200,
+      "p90": 690,
+      "p99": 1400,
+      "p999": 3820,
+      "p9999": 28380
+    }
+  },
+  "losses": [],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 500,
+    "duration_sec": 1,
+    "no_trace": true,
+    "output": "results/a-20261007T033711Z/a.json",
+    "payload": 64,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 64,
+    "src_ip": "10.202.15.210",
+    "stats_core": 3,
+    "timeout_us": 10000
+  },
+  "raw_trace": null,
+  "trace_records": 0,
+  "tsc_hz": 2600000000,
+  "units": "ns"
+}
