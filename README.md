@@ -23,10 +23,10 @@ device-number 0 留给 SSH/内核；另一张绑定 vfio-pci。运行配置由�
 
 每次运行创建新的结果目录，单独运行 A/B 时可追加客户端参数。测量日志与汇总放在独立分支 [codex/latency-results-20261006](https://github.com/zhishengyk/Rust-DPDK-Async-Runtime/tree/codex/latency-results-20261006/results)，入口为该分支的 results/README.md。
 
-## 直接运行
+## 逐项运行
 
-以下是本机的原始命令，在仓库根目录分别执行，等上一个完成后再运行下一个。
-首次准备：`mkdir -p results/local/ab results/local/ac`。A/B 默认使用核 2、payload 64B、对端 `10.202.8.15`。
+以下命令在仓库根目录分别执行，等上一个完成后再运行下一个。
+启动脚本会先创建输出目录，再运行客户端。A/B 默认使用核 2、payload 64B、对端 `10.202.8.15`。
 结束后终端显示统计，`--output` 指定 JSON 文件；相同文件名会覆盖旧结果。
 
 ### A/B：正式测试
@@ -34,30 +34,31 @@ device-number 0 留给 SSH/内核；另一张绑定 vfio-pci。运行配置由�
 A 和 B 都是 64 session、delay 500µs、持续 600 秒：
 
 ```bash
-sudo target/release/async-ping --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
+./scripts/run.sh a --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
   --sessions 64 --delay-us 500 --duration-sec 600 --output results/local/ab/a-600.json
 ```
 
 ```bash
-sudo target/release/raw-ping --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
+./scripts/run.sh b --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
   --sessions 64 --delay-us 500 --duration-sec 600 --output results/local/ab/b-600.json
 ```
 
 60 秒现场演示：把 A 命令中的 `--duration-sec 600` 改为 `60`，输出改为 `results/local/ab/a-60.json`。
-需要保留终端日志时，在命令后追加 `2>&1 | tee results/local/ab/a-600.log`，B/演示使用各自文件名。
+启动脚本会同时保存终端日志，结束时打印结果目录；`--output` 仍指定 JSON 和原始打点的位置。
 
 ### A/C：单会话端到端对照
 
 A：一个 session，收到回复后等待 950µs，运行 60 秒。
 
 ```bash
-sudo target/release/async-ping --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
+./scripts/run.sh a --bdf 0000:28:00.0 --src-ip 10.202.15.210 \
   --sessions 1 --delay-us 950 --duration-sec 60 --output results/local/ac/a.json
 ```
 
 C：系统 ping，同一客户端核、对端和包长，每 1ms 发包，运行 60 秒；同时显示并保存日志。
 
 ```bash
+mkdir -p results/local/ac && \
 sudo taskset -c 2 ping -n -U -I enp39s0 -i 0.001 -s 64 -w 60 -W 1 10.202.8.15 \
   | tee results/local/ac/c.log
 ```

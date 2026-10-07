@@ -33,6 +33,13 @@ fi
 run_client() {
   local client=$1 json=$2 log=$3 bin
   shift 3
+  local output=$json previous= arg
+  for arg in "$@"; do
+    if [[ $previous == --output ]]; then output=$arg; fi
+    if [[ $arg == --output=* ]]; then output=${arg#--output=}; fi
+    previous=$arg
+  done
+  mkdir -p "$(dirname "$output")"
   case "$client" in a) bin=async-ping ;; b) bin=raw-ping ;; esac
   sudo "target/release/$bin" --bdf "$BDF" --src-ip "$SRC_IP" --core "$CORE" \
     --peer-ip "$PEER_IP" --peer-mac "$PEER_MAC" --sessions 64 --payload 64 \
