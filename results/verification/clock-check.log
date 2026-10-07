@@ -1,0 +1,22 @@
+samples=1000000 gcd_ticks=26 min_ticks=52 max_ticks=22256 frequency_estimate=2599997167 Hz
+delta_mod26=0 count=1000000
+raw_delta=26
+raw_delta=104
+raw_delta=156
+raw_delta=182
+raw_delta=234
+raw_delta=260
+raw_delta=286
+raw_delta=338
+raw_delta=364
+raw_delta=390
+raw_delta=442
+raw_delta=494
+raw_delta=520
+raw_delta=546
+raw_delta=598
+raw_delta=624
+raw_delta=676
+raw_delta=702
+raw_delta=754
+raw_delta=780

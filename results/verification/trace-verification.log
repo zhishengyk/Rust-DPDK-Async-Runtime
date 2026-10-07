@@ -1,0 +1,19 @@
+file=/home/ec2-user/Rust-DPDK-Async-Runtime/results/ab-20261006T010514Z/a-60.ticks hz=2600000000 records=17462795 invalid=0 delta_gcd_ticks=26
+kind1=5820953 kind2=5820953 kind3=5820889 kind4=0 kind5=0 kind6=0 kind7=0 
+t1_t0_max_ns=19870 t3_t2_max_ns=32600 process_max_ns=32670 end_to_end_max_ns=374510 timer_max_ns=29650 sleep_error_max_ns=29420 
+JSON counts / maxima / file length: PASS
+
+file=/home/ec2-user/Rust-DPDK-Async-Runtime/results/ab-20261006T010514Z/a-600.ticks hz=2600000000 records=174764057 invalid=0 delta_gcd_ticks=26
+kind1=58254707 kind2=58254707 kind3=58254643 kind4=0 kind5=0 kind6=0 kind7=0 
+t1_t0_max_ns=34930 t3_t2_max_ns=81260 process_max_ns=81790 end_to_end_max_ns=463260 timer_max_ns=101290 sleep_error_max_ns=101070 
+JSON counts / maxima / file length: PASS
+
+file=/home/ec2-user/Rust-DPDK-Async-Runtime/results/ab-20261006T010514Z/b-600.ticks hz=2600000000 records=174821339 invalid=0 delta_gcd_ticks=26
+kind1=58273801 kind2=58273801 kind3=58273737 kind4=0 kind5=0 kind6=0 kind7=0 
+t1_t0_max_ns=33890 t3_t2_max_ns=41040 process_max_ns=41110 end_to_end_max_ns=413480 timer_max_ns=112560 sleep_error_max_ns=112520 
+JSON counts / maxima / file length: PASS
+
+file=/home/ec2-user/Rust-DPDK-Async-Runtime/results/ac-20261006T012620Z/a.ticks hz=2600000000 records=180206 invalid=0 delta_gcd_ticks=26
+kind1=60069 kind2=60069 kind3=60068 kind4=0 kind5=0 kind6=0 kind7=0 
+t1_t0_max_ns=17510 t3_t2_max_ns=2830 process_max_ns=18480 end_to_end_max_ns=128010 timer_max_ns=4490 sleep_error_max_ns=2450 
+JSON counts / maxima / file length: PASS
