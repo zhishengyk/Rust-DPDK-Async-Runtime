@@ -1,0 +1,103 @@
+{
+  "accounted": true,
+  "client": "A",
+  "counters": {
+    "alloc_failed": 0,
+    "arp_tx_failed": 0,
+    "late_reply": 0,
+    "rx": 5858373,
+    "timeout": 0,
+    "tx": 5858373,
+    "tx_failed": 0
+  },
+  "elapsed_sec": 60.00057523,
+  "latency": {
+    "end_to_end": {
+      "count": 5858373,
+      "max": 2441560,
+      "p50": 159640,
+      "p90": 166120,
+      "p99": 238390,
+      "p999": 247840,
+      "p9999": 296301
+    },
+    "process": {
+      "count": 5858373,
+      "max": 37190,
+      "p50": 260,
+      "p90": 480,
+      "p99": 760,
+      "p999": 930,
+      "p9999": 1950
+    },
+    "sleep_error": {
+      "count": 5858373,
+      "max": 42390,
+      "p50": 160,
+      "p90": 650,
+      "p99": 1190,
+      "p999": 2010,
+      "p9999": 13020
+    },
+    "t1_t0": {
+      "count": 5858373,
+      "max": 31820,
+      "p50": 80,
+      "p90": 300,
+      "p99": 570,
+      "p999": 710,
+      "p9999": 850
+    },
+    "t3_t2": {
+      "count": 5858373,
+      "max": 37110,
+      "p50": 160,
+      "p90": 270,
+      "p99": 380,
+      "p999": 490,
+      "p9999": 1640
+    },
+    "timer": {
+      "count": 5858309,
+      "max": 42630,
+      "p50": 200,
+      "p90": 700,
+      "p99": 1370,
+      "p999": 2230,
+      "p9999": 13240
+    }
+  },
+  "losses": [],
+  "mempool": {
+    "final": 4095,
+    "initial": 4095,
+    "leak_free": true
+  },
+  "missing": 0,
+  "options": {
+    "bdf": "0000:28:00.0",
+    "core": 2,
+    "delay_us": 500,
+    "duration_sec": 60,
+    "no_trace": false,
+    "output": "/tmp/dpdk-delivery-audit.G7IiqU/a-60.json",
+    "payload": 64,
+    "peer_ip": "10.202.8.15",
+    "peer_mac": [
+      6,
+      255,
+      253,
+      182,
+      240,
+      205
+    ],
+    "sessions": 64,
+    "src_ip": "10.202.15.210",
+    "stats_core": 3,
+    "timeout_us": 10000
+  },
+  "raw_trace": "/tmp/dpdk-delivery-audit.G7IiqU/a-60.ticks",
+  "trace_records": 17575055,
+  "tsc_hz": 2600000000,
+  "units": "ns"
+}

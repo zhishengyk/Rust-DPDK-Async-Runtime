@@ -1,0 +1,24 @@
+{
+  "client": "C",
+  "units": "ns",
+  "elapsed_sec": 1,
+  "tx": 1001,
+  "rx": 1001,
+  "loss": 0,
+  "packets_per_sec": 1001.0,
+  "latency": {
+    "end_to_end": {
+      "count": 1001,
+      "p50": 87000,
+      "p90": 148000,
+      "p99": 150000,
+      "p999": 153000,
+      "p9999": 208000,
+      "max": 208000
+    }
+  },
+  "interval_ms": 1,
+  "payload": 64,
+  "sessions": 1,
+  "receive_timestamp": "userspace (-U)"
+}

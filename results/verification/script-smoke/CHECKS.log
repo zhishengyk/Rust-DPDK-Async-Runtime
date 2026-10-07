@@ -1,0 +1,12 @@
+setup.sh syntax: PASS
+run.sh syntax: PASS
+Python report and embedded ENI discovery syntax: PASS
+Rust / DPDK implementation unchanged: PASS
+README script references: PASS
+AB report matches preserved formal report: PASS
+AC report matches preserved formal report: PASS
+C log conversion matches preserved formal JSON: PASS
+Compressed raw trace reader: PASS
+A unified runner: PASS; replies=99100; mbuf=4095->4095
+B unified runner: PASS; replies=97704; mbuf=4095->4095
+C unified runner: PASS; replies=1001

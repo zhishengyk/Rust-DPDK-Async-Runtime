@@ -1,0 +1,15 @@
+EAL: No free 1048576 kB hugepages reported on node 0
+ena_get_metrics_entries(): 0x6 customer metrics are supported
+TELEMETRY: No legacy callbacks, legacy socket not created
+ena_rx_queue_release(): Rx queue 0:0 released
+ena_tx_queue_release(): Tx queue 0:0 released
+client=A sessions=64 duration=1s delay=500us payload=64 timeout=10000us
+metric(ns)         p50        p90        p99      p99.9     p99.99        max      samples
+end_to_end         159390     163190     229210     233480     249530     262210        99100
+process               250        470        810       1040       2530      23560        99100
+sleep_error           150        640       1200       3580      27650      33560        99100
+t1_t0                  80        290        620        770       2290      23380        99100
+t3_t2                 160        270        380        570       2000       2620        99100
+timer                 200        690       1400       3820      28380      33790        99036
+tx=99100 rx=99100 timeout=0 late=0 missing=0 tx_failed=0 alloc_failed=0 accounted=true
+mempool: 4095 -> 4095; report=results/a-20261007T033711Z/a.json

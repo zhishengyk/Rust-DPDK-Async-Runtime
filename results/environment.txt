@@ -91,3 +91,6 @@ results/ab-20261006T010514Z/SUMMARY.md
 Running A: 60 seconds
 Running C: 60 seconds
 results/ac-20261006T012620Z/SUMMARY.md
+
+交付源码 main 提交：f28ff768ac95459ece9804847d42890a2ce4feb7
+测量基线运行时源码未修改，脚本与文档更新不改变已有测量的打点口径。
