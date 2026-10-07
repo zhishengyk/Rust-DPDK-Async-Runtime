@@ -21,7 +21,7 @@ device-number 0 留给 SSH/内核；另一张绑定 vfio-pci。运行配置由�
 ./scripts/run.sh c 60
 ```
 
-每次运行创建新的结果目录，单独运行 A/B 时可追加客户端参数。测量日志与汇总放在独立分支 [codex/latency-results-20261006](https://github.com/zhishengyk/Rust-DPDK-Async-Runtime/tree/codex/latency-results-20261006/results)，入口为该分支的 results/README.md。
+每次运行创建新的结果目录，单独运行 A/B 时可追加客户端参数。测量日志与汇总在results/README.md下面。
 
 ## 逐项运行
 
