@@ -1,0 +1,577 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Rust DPDK Async Runtime · 源码架构",
+    "locale": "zh-CN",
+    "output": "docs/archify/rustdpdk-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/zhishengyk/Rust-DPDK-Async-Runtime",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "b554439268771d1cadee0bb15dc5109aba96c829"
+    },
+    "views": [
+      {
+        "id": "overview",
+        "label": "端到端架构",
+        "focus": [
+          "run",
+          "a",
+          "executor",
+          "slot",
+          "shared",
+          "port",
+          "shim",
+          "nic"
+        ]
+      },
+      {
+        "id": "scheduler",
+        "label": "自研 Runtime",
+        "focus": [
+          "a",
+          "executor",
+          "slot",
+          "timer",
+          "shared"
+        ]
+      },
+      {
+        "id": "comparison",
+        "label": "A / B 对照",
+        "focus": [
+          "run",
+          "a",
+          "b",
+          "shared",
+          "wire",
+          "port"
+        ]
+      },
+      {
+        "id": "measurement",
+        "label": "测量链路",
+        "focus": [
+          "shared",
+          "recorder",
+          "worker",
+          "files",
+          "report",
+          "c"
+        ]
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "run",
+      "type": "frontend",
+      "label": "实验入口",
+      "sublabel": "scripts/run.sh",
+      "pos": [
+        42,
+        420
+      ],
+      "size": [
+        176,
+        83
+      ],
+      "sources": [
+        {
+          "path": "scripts/run.sh",
+          "line": 9,
+          "end_line": 30
+        }
+      ]
+    },
+    {
+      "id": "a",
+      "type": "backend",
+      "label": "A · async-ping",
+      "sublabel": "每 session 一条 Future",
+      "pos": [
+        275,
+        155
+      ],
+      "size": [
+        195,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/async_ping.rs",
+          "line": 9,
+          "end_line": 93
+        }
+      ]
+    },
+    {
+      "id": "executor",
+      "type": "backend",
+      "label": "单线程 Executor",
+      "sublabel": "poll / Ready FIFO / Waker",
+      "pos": [
+        528,
+        155
+      ],
+      "size": [
+        203,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/rt.rs",
+          "line": 190,
+          "end_line": 309
+        }
+      ]
+    },
+    {
+      "id": "slot",
+      "type": "messagebus",
+      "label": "Reply Slot + Waker",
+      "sublabel": "deliver → wake → ready",
+      "pos": [
+        810,
+        155
+      ],
+      "size": [
+        194,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/rt.rs",
+          "line": 385,
+          "end_line": 449
+        }
+      ]
+    },
+    {
+      "id": "timer",
+      "type": "backend",
+      "label": "Timer Slots",
+      "sublabel": "sleep / deadline / timeout",
+      "pos": [
+        528,
+        347
+      ],
+      "size": [
+        203,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/rt.rs",
+          "line": 145,
+          "end_line": 186
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "type": "backend",
+      "label": "B · raw-ping",
+      "sublabel": "Waiting / Sleeping / Done",
+      "pos": [
+        275,
+        579
+      ],
+      "size": [
+        195,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/raw_ping.rs",
+          "line": 7,
+          "end_line": 125
+        }
+      ]
+    },
+    {
+      "id": "c",
+      "type": "external",
+      "label": "C · 系统 ping",
+      "sublabel": "内核协议栈基线",
+      "pos": [
+        275,
+        801
+      ],
+      "size": [
+        195,
+        84
+      ],
+      "sources": [
+        {
+          "path": "scripts/run.sh",
+          "line": 49,
+          "end_line": 55
+        }
+      ]
+    },
+    {
+      "id": "shared",
+      "type": "backend",
+      "label": "Shared · 共用 I/O",
+      "sublabel": "send / dispatch / match",
+      "pos": [
+        808,
+        391
+      ],
+      "size": [
+        196,
+        86
+      ],
+      "sources": [
+        {
+          "path": "src/ping_common.rs",
+          "line": 223,
+          "end_line": 330
+        }
+      ]
+    },
+    {
+      "id": "wire",
+      "type": "backend",
+      "label": "Ethernet / IPv4 / ICMP",
+      "sublabel": "模板 + 校验和 + ARP",
+      "pos": [
+        1065,
+        160
+      ],
+      "size": [
+        188,
+        80
+      ],
+      "sources": [
+        {
+          "path": "src/wire.rs",
+          "line": 43,
+          "end_line": 157
+        }
+      ]
+    },
+    {
+      "id": "port",
+      "type": "backend",
+      "label": "Rust DPDK Port",
+      "sublabel": "Mbuf / RX 32 / TX 1",
+      "pos": [
+        1065,
+        391
+      ],
+      "size": [
+        188,
+        86
+      ],
+      "sources": [
+        {
+          "path": "src/dpdk.rs",
+          "line": 37,
+          "end_line": 205
+        }
+      ]
+    },
+    {
+      "id": "shim",
+      "type": "backend",
+      "label": "C FFI Shim",
+      "sublabel": "native/shim.c · w_*",
+      "pos": [
+        1330,
+        391
+      ],
+      "size": [
+        180,
+        86
+      ],
+      "sources": [
+        {
+          "path": "native/shim.c",
+          "line": 20,
+          "end_line": 110
+        }
+      ]
+    },
+    {
+      "id": "nic",
+      "type": "external",
+      "label": "ENA / vfio-pci",
+      "sublabel": "DPDK poll-mode NIC",
+      "pos": [
+        1580,
+        391
+      ],
+      "size": [
+        178,
+        86
+      ],
+      "sources": [
+        {
+          "path": "README.md",
+          "line": 5,
+          "end_line": 10
+        }
+      ]
+    },
+    {
+      "id": "recorder",
+      "type": "messagebus",
+      "label": "Recorder / Batch",
+      "sublabel": "256 Event 本地缓冲",
+      "pos": [
+        808,
+        641
+      ],
+      "size": [
+        196,
+        86
+      ],
+      "sources": [
+        {
+          "path": "src/metrics.rs",
+          "line": 200,
+          "end_line": 319
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "统计线程 · 核 3",
+      "sublabel": "HDR Histogram / writer",
+      "pos": [
+        1065,
+        641
+      ],
+      "size": [
+        188,
+        86
+      ],
+      "sources": [
+        {
+          "path": "src/metrics.rs",
+          "line": 233,
+          "end_line": 279
+        }
+      ]
+    },
+    {
+      "id": "files",
+      "type": "database",
+      "label": "测量产物",
+      "sublabel": "*.ticks / *.json / *.log",
+      "pos": [
+        1330,
+        641
+      ],
+      "size": [
+        180,
+        86
+      ],
+      "sources": [
+        {
+          "path": "src/ping_common.rs",
+          "line": 350,
+          "end_line": 408
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "type": "backend",
+      "label": "报告聚合",
+      "sublabel": "report.py → SUMMARY.md",
+      "pos": [
+        1580,
+        641
+      ],
+      "size": [
+        178,
+        86
+      ],
+      "sources": [
+        {
+          "path": "scripts/report.py",
+          "line": 17,
+          "end_line": 89
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "run-to-a",
+      "from": "run",
+      "to": "a",
+      "label": "A · async",
+      "variant": "emphasis"
+    },
+    {
+      "id": "run-to-b",
+      "from": "run",
+      "to": "b",
+      "label": "B · busy",
+      "variant": "dashed"
+    },
+    {
+      "id": "run-to-c",
+      "from": "run",
+      "to": "c",
+      "label": "C · kernel",
+      "variant": "dashed"
+    },
+    {
+      "id": "a-to-executor",
+      "from": "a",
+      "to": "executor",
+      "label": "spawn / run",
+      "variant": "emphasis"
+    },
+    {
+      "id": "executor-to-shared",
+      "from": "executor",
+      "to": "shared",
+      "label": "reactor: rx_burst",
+      "variant": "emphasis"
+    },
+    {
+      "id": "a-to-shared",
+      "from": "a",
+      "to": "shared",
+      "label": "send / await",
+      "variant": "emphasis"
+    },
+    {
+      "id": "shared-to-slot",
+      "from": "shared",
+      "to": "slot",
+      "label": "deliver(reply)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "slot-to-executor",
+      "from": "slot",
+      "to": "executor",
+      "label": "Waker → Ready FIFO",
+      "variant": "emphasis"
+    },
+    {
+      "id": "executor-to-timer",
+      "from": "executor",
+      "to": "timer",
+      "label": "arm / fire",
+      "variant": "default"
+    },
+    {
+      "id": "b-to-shared",
+      "from": "b",
+      "to": "shared",
+      "label": "状态表直接驱动",
+      "variant": "dashed"
+    },
+    {
+      "id": "shared-to-wire",
+      "from": "shared",
+      "to": "wire",
+      "label": "emit / classify / ARP",
+      "variant": "default"
+    },
+    {
+      "id": "shared-to-port",
+      "from": "shared",
+      "to": "port",
+      "label": "port.send / receive",
+      "variant": "emphasis"
+    },
+    {
+      "id": "port-to-shim",
+      "from": "port",
+      "to": "shim",
+      "label": "FFI: w_*",
+      "variant": "default"
+    },
+    {
+      "id": "shim-to-nic",
+      "from": "shim",
+      "to": "nic",
+      "label": "rte_eth_{rx,tx}_burst",
+      "variant": "emphasis"
+    },
+    {
+      "id": "shared-to-recorder",
+      "from": "shared",
+      "to": "recorder",
+      "label": "T0–T5 数值事件",
+      "variant": "dashed"
+    },
+    {
+      "id": "recorder-to-worker",
+      "from": "recorder",
+      "to": "worker",
+      "label": "批量 SPSC",
+      "variant": "dashed"
+    },
+    {
+      "id": "worker-to-files",
+      "from": "worker",
+      "to": "files",
+      "label": "HDR + raw ticks",
+      "variant": "dashed"
+    },
+    {
+      "id": "files-to-report",
+      "from": "files",
+      "to": "report",
+      "label": "report.py 汇总",
+      "variant": "dashed"
+    },
+    {
+      "id": "c-to-report",
+      "from": "c",
+      "to": "report",
+      "label": "ping -U 单会话基线",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "A · Async Executor",
+      "items": [
+        "每 session 一个 Future；Waker 唤醒仅入去重 Ready 队列",
+        "Reactor 交付 Reply 后优先 poll，再检查 timer",
+        "Receiver 先消费已收到的回复再处理超时"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "B · 对照基线",
+      "items": [
+        "Waiting / Sleeping / Done 状态表，不经过 Executor、Waker",
+        "A/B 共用 Shared I/O、Wire、Port 与测量 Recorder"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "实测：64 session，600 秒",
+      "items": [
+        "A/B 发包速率约 97k packets/s",
+        "process 两段和 A−B：p50 = +30ns，p99 = +60ns",
+        "数据源：results/ab/SUMMARY.md"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "边界",
+      "items": [
+        "收发核 2；独立统计核 3，经 SPSC 仅传数值",
+        "C 是内核 ping -U，不共用 DPDK PMD",
+        "A/C 单会话不能外推为 64 session"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "RustDPDK · A 模式收发与唤醒时序",
+    "output": "docs/archify/rustdpdk-reply-sequence.html",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1660,
+      900
+    ],
+    "repository": {
+      "url": "https://github.com/zhishengyk/Rust-DPDK-Async-Runtime",
+      "revision": "b554439268771d1cadee0bb15dc5109aba96c829",
+      "provider": "github",
+      "link_mode": "web"
+    }
+  },
+  "participants": [
+    {
+      "id": "session",
+      "type": "backend",
+      "label": "A Session",
+      "sublabel": "async Future",
+      "sources": [
+        {
+          "path": "src/async_ping.rs",
+          "line": 9,
+          "end_line": 63
+        }
+      ]
+    },
+    {
+      "id": "exec",
+      "type": "backend",
+      "label": "Runtime",
+      "sublabel": "poll + timer",
+      "sources": [
+        {
+          "path": "src/rt.rs",
+          "line": 241,
+          "end_line": 309
+        }
+      ]
+    },
+    {
+      "id": "slot",
+      "type": "messagebus",
+      "label": "Reply Slot",
+      "sublabel": "Slot + Waker",
+      "sources": [
+        {
+          "path": "src/rt.rs",
+          "line": 385,
+          "end_line": 449
+        }
+      ]
+    },
+    {
+      "id": "io",
+      "type": "backend",
+      "label": "Shared I/O",
+      "sublabel": "dispatch / match",
+      "sources": [
+        {
+          "path": "src/ping_common.rs",
+          "line": 225,
+          "end_line": 330
+        }
+      ]
+    },
+    {
+      "id": "port",
+      "type": "backend",
+      "label": "DPDK Port",
+      "sublabel": "Mbuf + burst",
+      "sources": [
+        {
+          "path": "src/dpdk.rs",
+          "line": 152,
+          "end_line": 189
+        }
+      ]
+    },
+    {
+      "id": "ffi",
+      "type": "backend",
+      "label": "C Shim",
+      "sublabel": "w_tx / w_rx",
+      "sources": [
+        {
+          "path": "native/shim.c",
+          "line": 80,
+          "end_line": 110
+        }
+      ]
+    },
+    {
+      "id": "stats",
+      "type": "messagebus",
+      "label": "Recorder",
+      "sublabel": "SPSC → core 3",
+      "sources": [
+        {
+          "path": "src/metrics.rs",
+          "line": 200,
+          "end_line": 339
+        }
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg1",
+      "from": "session",
+      "to": "io",
+      "y": 171,
+      "label": "T0 · send(sid, seq)",
+      "variant": "default"
+    },
+    {
+      "id": "msg2",
+      "from": "io",
+      "to": "port",
+      "y": 206,
+      "label": "emit / alloc / TX",
+      "variant": "default"
+    },
+    {
+      "id": "msg3",
+      "from": "port",
+      "to": "ffi",
+      "y": 241,
+      "label": "w_tx → rte_eth_tx_burst",
+      "variant": "default"
+    },
+    {
+      "id": "msg4",
+      "from": "ffi",
+      "to": "port",
+      "y": 276,
+      "label": "T1 · TX 提交返回",
+      "variant": "return"
+    },
+    {
+      "id": "msg5",
+      "from": "port",
+      "to": "io",
+      "y": 311,
+      "label": "Stamp(seq,T0,T1,deadline)",
+      "variant": "return"
+    },
+    {
+      "id": "msg6",
+      "from": "exec",
+      "to": "io",
+      "y": 346,
+      "label": "Reactor 调用 receive()",
+      "variant": "default"
+    },
+    {
+      "id": "msg7",
+      "from": "io",
+      "to": "port",
+      "y": 381,
+      "label": "RX burst",
+      "variant": "default"
+    },
+    {
+      "id": "msg8",
+      "from": "port",
+      "to": "ffi",
+      "y": 416,
+      "label": "w_rx → rte_eth_rx_burst",
+      "variant": "default"
+    },
+    {
+      "id": "msg9",
+      "from": "ffi",
+      "to": "port",
+      "y": 451,
+      "label": "T2 · RX 批返回",
+      "variant": "return"
+    },
+    {
+      "id": "msg10",
+      "from": "port",
+      "to": "io",
+      "y": 486,
+      "label": "mbuf + T2",
+      "variant": "return"
+    },
+    {
+      "id": "msg11",
+      "from": "io",
+      "to": "io",
+      "y": 521,
+      "label": "classify + 匹配 sid/seq/T0",
+      "variant": "default"
+    },
+    {
+      "id": "msg12",
+      "from": "io",
+      "to": "slot",
+      "y": 556,
+      "label": "deliver(reply)",
+      "variant": "default"
+    },
+    {
+      "id": "msg13",
+      "from": "slot",
+      "to": "exec",
+      "y": 591,
+      "label": "wake() → Ready FIFO",
+      "variant": "default"
+    },
+    {
+      "id": "msg14",
+      "from": "exec",
+      "to": "session",
+      "y": 626,
+      "label": "poll Receive → T3",
+      "variant": "default"
+    },
+    {
+      "id": "msg15",
+      "from": "session",
+      "to": "exec",
+      "y": 661,
+      "label": "sleep(delay)，注册 T4",
+      "variant": "default"
+    },
+    {
+      "id": "msg16",
+      "from": "exec",
+      "to": "session",
+      "y": 696,
+      "label": "timer 到期 → poll，T5",
+      "variant": "return"
+    },
+    {
+      "id": "msg17",
+      "from": "session",
+      "to": "stats",
+      "y": 731,
+      "label": "记录 TSC / 释放 RX mbuf",
+      "variant": "dashed"
+    },
+    {
+      "id": "msg18",
+      "from": "session",
+      "to": "io",
+      "y": 766,
+      "label": "T0′ · 下一次 send",
+      "variant": "default"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "执行顺序",
+      "items": [
+        "reactor() → poll_ready() → timers.fire() → poll_ready() → maintenance()",
+        "Reply 在 Timer 扫描前先交付 task",
+        "Slot::deliver 不同步重入执行 Future"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Mbuf 生命周期",
+      "items": [
+        "Reply 将 RX mbuf 转交 Session，Sample 跨 await 持有",
+        "成功 TX 时 PMD 接管 mbuf",
+        "TSC 数值传给统计线程，而不是报文内存"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "T0–T5",
+      "items": [
+        "T0 send，T1 TX burst 返回",
+        "T2 RX burst 返回，T3 reply 交付",
+        "T4 sleep deadline，T5 session 恢复"
+      ]
+    }
+  ]
+}
